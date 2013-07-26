@@ -26,7 +26,8 @@ import time
 from xml.dom.minidom import parseString
 
 from cinder import exception
-from cinder import flags
+# ERIC: we get an error imprting flags
+# from cinder import flags
 from cinder.openstack.common import log as logging
 from cinder import utils
 from cinder.volume import driver

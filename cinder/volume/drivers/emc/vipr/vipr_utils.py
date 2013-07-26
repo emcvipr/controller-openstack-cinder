@@ -96,12 +96,16 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None, xml=
     '''
     global COOKIE
 
+    # import pdb; pdb.set_trace()
+
+    SEC_AUTHTOKEN_HEADER   = 'X-SDS-AUTH-TOKEN'
+
     if (xml):
-         headers = {'Content-Type': contenttype, 'ACCEPT': 'application/xml',
-			'X-EMC-REST-CLIENT': 'TRUE'}
+         headers = {'Content-Type': contenttype, 'ACCEPT': 'application/xml, application/octet-stream',
+                        'X-EMC-REST-CLIENT': 'TRUE'}
     else:
-         headers = {'Content-Type': contenttype, 'ACCEPT': 'application/json',
-			'X-EMC-REST-CLIENT': 'TRUE'} 
+         headers = {'Content-Type': contenttype, 'ACCEPT': 'application/json, application/octet-stream',
+                        'X-EMC-REST-CLIENT': 'TRUE'}
 
     if (token):
         if ('?' in uri):
@@ -145,10 +149,14 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None, xml=
             if (not os.path.isfile(cookiefile)):
                 raise SOSError(SOSError.NOT_FOUND_ERR,
                    cookiefile + " : Not a cookie file")
-            cookiejar.load(cookiefile, ignore_discard=True, ignore_expires=True)
+            #cookiejar.load(cookiefile, ignore_discard=True, ignore_expires=True)
+            tokenfile = open(cookiefile)
+            token = tokenfile.read()
+            tokenfile.close()
         else:
             raise SOSError(SOSError.NOT_FOUND_ERR, cookiefile + " : Cookie file not found")
-            
+
+        headers[SEC_AUTHTOKEN_HEADER] = token
         if (http_method == 'GET'):
             response = requests.get(url, headers=headers, verify=False, cookies=cookiejar)  
             if(filename):
