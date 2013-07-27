@@ -27,14 +27,14 @@ from cinder import exception
 from cinder.openstack.common import log as logging
 from cinder.volume import volume_types
 
-from vipr_auth import Authentication
-import vipr_utils
-from vipr_utils import SOSError
-from vipr_exportgroup import ExportGroup
-from vipr_neighborhood import Neighborhood
-from vipr_project import Project
-from vipr_snapshot import Snapshot
-from vipr_volume import Volume
+from authentication import Authentication
+import common as vipr_utils
+from common import SOSError
+from exportgroup import ExportGroup
+from neighborhood import Neighborhood
+from project import Project
+from snapshot import Snapshot
+from volume import Volume
 
 LOG = logging.getLogger(__name__)
 
@@ -155,9 +155,14 @@ class EMCViPRDriverCommon():
                              size,
                              self.neighborhood,
                              self.vpool,
-                             self.protocol,
+                             '',
                              sync,
-                             count)
+                             count,
+                             False,
+                             False,
+                             '',
+                             ''
+                             )
             if(sync == False):
                 return vipr_utils.format_json_object(res)
         except SOSError as e:
