@@ -21,18 +21,19 @@ class StorageSystem(object):
     The class definition for operations on 'Storage system'.
     '''
     #Commonly used URIs for the 'StorageSystem' module
-    URI_STORAGESYSTEM_LIST = '/zone/storage-systems'
-    URI_STORAGESYSTEM_DETAILS = '/zone/storage-systems/{0}'
-    URI_STORAGESYSTEM_INVENTORY = '/zone/storage-systems/{0}/physical-inventory'
+    URI_STORAGESYSTEM_LIST = '/vdc/storage-systems'
+    URI_STORAGESYSTEM_DETAILS = '/vdc/storage-systems/{0}'
+    URI_STORAGESYSTEM_INVENTORY = '/vdc/storage-systems/{0}/physical-inventory'
     
-    URI_STORAGESYSTEM_REGISTER = '/zone/smis-providers/{0}/storage-systems/{1}/register'
-    URI_STORAGESYSTEM_UNREGISTER = '/zone/storage-systems/{0}/deregister'
-    URI_STORAGESYSTEM_DISCOVER_BY_ID = '/zone/storage-systems/{0}/discover'
-    URI_STORAGESYSTEM_DISCOVER_ALL = '/zone/storage-systems/discover'
+    URI_STORAGESYSTEM_REGISTER = '/vdc/smis-providers/{0}/storage-systems/{1}/register'
+    URI_STORAGESYSTEM_UNREGISTER = '/vdc/storage-systems/{0}/deregister'
+    URI_STORAGESYSTEM_DELETE = '/vdc/storage-systems/{0}/deactivate'
+    URI_STORAGESYSTEM_DISCOVER_BY_ID = '/vdc/storage-systems/{0}/discover'
+    URI_STORAGESYSTEM_DISCOVER_ALL = '/vdc/storage-systems/discover'
     
-    URI_SMISPROVIDER_LIST = '/zone/smis-providers'
-    URI_SMISPROVIDER_DETAILS = '/zone/smis-providers/{0}'
-    URI_STORAGESYSTEM_CONNECTIVITY = '/zone/storage-systems/{0}/connectivity'
+    URI_SMISPROVIDER_LIST = '/vdc/smis-providers'
+    URI_SMISPROVIDER_DETAILS = '/vdc/smis-providers/{0}'
+    URI_STORAGESYSTEM_CONNECTIVITY = '/vdc/storage-systems/{0}/connectivity'
 
     SYSTEM_TYPE_LIST = ['isilon', 'vnxblock', 'vnxfile', 'vmax', 'netapp', 'vplex']
     
@@ -99,7 +100,7 @@ class StorageSystem(object):
         providers = self.smis_device_list()
         for provider in providers:
             smisprovider = self.smis_device_show_by_uri(provider['id'])
-            if (smisprovider['name'] == name):
+            if (smisprovider is not None and smisprovider['name'] == name):
                 return smisprovider['id']
         raise SOSError(SOSError.NOT_FOUND_ERR,
                        "Storage system with name: " + name + " not found")
@@ -166,16 +167,15 @@ class StorageSystem(object):
                 raise e
                 
         if(storage_system_exists):
-            raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                           "Storage system with name: " + 
-                           system_name + " already exists")
+            common.print_err_msg_and_exit("create", "storagesystem", 
+                                          "Storage system with name: " +system_name + " already exists", 
+                                          SOSError.ENTRY_ALREADY_EXISTS_ERR)
             
         if(device_type in ["vmax", "vnxblock"]):
-            return self.smis_device_create(system_name, smis_ip, smis_port, 
-                                           smis_user, smis_passwd, use_ssl)
+            return self.smis_device_create(system_name, smis_ip, smis_port, smis_user, smis_passwd, use_ssl)
         else:
             request = {
-                #'name' : system_name,
+                'name' : system_name,
                 'system_type' : device_type,
                 'ip_address' : ip_address,
                 'port_number' : port,
@@ -236,7 +236,7 @@ class StorageSystem(object):
             return o
         return
     
-    def query_by_serial_number(self, serial_number, system_type):
+    def query_by_serial_number_and_type(self, serial_number, system_type):
         serial_num_length = len(serial_number)
         
         if(serial_num_length < 3):
@@ -251,7 +251,24 @@ class StorageSystem(object):
                 return system['id']
            
         raise SOSError(SOSError.NOT_FOUND_ERR,
-                       'Storage system not found with serial number: ' + serial_number)
+                       'Storage system not found with serial number: ' + serial_number + ' and type : '+system_type)
+    
+    def query_by_serial_number(self, serial_number):
+        serial_num_length = len(serial_number)
+        
+        if(serial_num_length < 3):
+            raise SOSError(SOSError.NOT_FOUND_ERR,
+                       'The serial number: ' + serial_number + ' is invalid')
+        systems = self.list_systems()
+        for system in systems:
+            storage_system = self.show_by_uri(system['id'])
+            if ("serial_number" in storage_system 
+                and
+                storage_system['serial_number'].endswith(serial_number)):
+                return system['id']
+           
+        raise SOSError(SOSError.NOT_FOUND_ERR,
+                       'Storage system not found with serial number: ' + serial_number)    
     
     
     def list_systems(self):
@@ -293,6 +310,11 @@ class StorageSystem(object):
                 elif("name" in attribval and "name" in system):
                     if(attribval["name"] == system["name"]):
                         output.append(system)
+                #Adding native_guid comparison for name check as CLI populates the native_guid as the name of
+                #the array if there is no 'name' attribute for the array system from API.
+                elif("name" in attribval and "name" not in system and "native_guid" in system):
+                    if(attribval["name"] == system["native_guid"]):
+                        output.append(system)
         return output
     
     def ps_connectivity_show(self, type, serialnum):
@@ -300,7 +322,7 @@ class StorageSystem(object):
         Makes a REST API call to retrieve details of a storage system based on its UUID
         '''
         
-        storage_system_id = self.query_by_serial_number(serialnum, type)
+        storage_system_id = self.query_by_serial_number_and_type(serialnum, type)
          
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
                                              StorageSystem.URI_STORAGESYSTEM_CONNECTIVITY.format(storage_system_id),
@@ -347,15 +369,17 @@ class StorageSystem(object):
         '''
 
         if("serialnum" in attribval and "type" in attribval):
-            storage_system_id = self.query_by_serial_number(attribval["serialnum"], attribval["type"])
+            storage_system_id = self.query_by_serial_number_and_type(attribval["serialnum"], attribval["type"])
             return self.show_by_uri(storage_system_id, xml)
         
         elif("name" in attribval and "type" in attribval):
             storage_systems = self.list_systems_by_query(type=attribval["type"])
             if(len(storage_systems) > 0):
                 for system in storage_systems:
-                    if("name" in system and system["name"] == attribval["name"] and 
-                       system["system_type"] == attribval["type"]):
+                    if( ( ("name" in system and system["name"] == attribval["name"])
+                        or("name" not in system and "native_guid" in system and system["native_guid"] == attribval["name"]) )
+                        and 
+                       (system["system_type"] == attribval["type"])):
                         return self.show_by_uri(system['id'], xml)
                 
                 smis_providers = self.smis_device_list()
@@ -384,8 +408,10 @@ class StorageSystem(object):
         storage_systems = self.list_systems_by_query()
         if(len(storage_systems) > 0):
             for system in storage_systems:
-                if("name" in system and 
-                   system["name"] == name):
+                if(("name" in system and system["name"] == name)
+                   #Adding native_guid comparison for name check as CLI populates the native_guid as the name of
+                   #the array if there is no 'name' attribute for the array.
+                   or ("name" not in system and "native_guid" in system and system["native_guid"] == name)):
                     return system
             
             smis_providers = self.smis_device_list()
@@ -412,8 +438,8 @@ class StorageSystem(object):
         '''
         Makes a REST API call to delete a storage system by its UUID
         '''
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "DELETE",
-                                             StorageSystem.URI_STORAGESYSTEM_DETAILS.format(uri),
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                                             StorageSystem.URI_STORAGESYSTEM_DELETE.format(uri),
                                               None)
         return
     
@@ -424,7 +450,7 @@ class StorageSystem(object):
         
         urideviceid = None
         if(serialno):
-            urideviceid = self.query_by_serial_number(serialno, device_type)
+            urideviceid = self.query_by_serial_number_and_type(serialno, device_type)
         elif(device_name):
             urideviceidTemp = self.show(name=device_name, type=device_type)
             urideviceid = urideviceidTemp['id']    
@@ -445,6 +471,32 @@ class StorageSystem(object):
                                             request_uri, None)
         return
     
+    def update(self, deviceId, body):
+        # Do the actual update
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
+                                             StorageSystem.URI_STORAGESYSTEM_DETAILS.format(deviceId), body)
+        return
+    
+    #Extracted password reading as a method
+    def get_password(self, componentName):
+        if sys.stdin.isatty():
+            passwd = getpass.getpass(prompt="Enter password of the "+componentName+": ")
+        else:
+            passwd = sys.stdin.readline().rstrip()
+                
+        if (len(passwd) > 0):
+            if sys.stdin.isatty():
+                confirm_passwd = getpass.getpass(prompt="Retype password: ")
+            else:
+                confirm_passwd = sys.stdin.readline().rstrip()
+            if (confirm_passwd != passwd):
+                raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
+                        " " + sys.argv[2] + ": error: Passwords mismatch")
+        else:
+            raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
+                           " " + sys.argv[2] + ": error: Invalid password")
+        
+        return passwd
 
 def create_parser(subcommand_parsers, common_parser):
     # create command parser
@@ -501,73 +553,33 @@ def create_parser(subcommand_parsers, common_parser):
     create_parser.set_defaults(func=storagesystem_create)
     
 
+'''
+Function to pre-process all the checks necessary for create storage system 
+and invoke the create call after pre-propcessing is passed
+'''
 def storagesystem_create(args):
     
+    #VNXBlock and VMAX are SMIS managed devices. To get the manageability of such devices requires 
+    #Registering/creating SMI-S server which manages the underneath arrays.
     if (args.type in ['vnxblock', 'vmax']):
-        if(args.smisip and args.smisport and args.smisuser):
-            if(not common.validate_port_number(args.smisport)):
-                raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: -smisport " + str(args.smisport) + 
-                               ": is not a valid port number")
-            else:
-                pass
-        else:
-            raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: For device type " + args.type + 
-                            " -smisuser, -smisip and -smisport are required")
-            
-
+        validate_smis_props(args)
+    #VNXFile requires both 1) Device props and 2) SMI-S Props
+    #SMI-S provider is used to generate indications
+    elif (args.type == 'vnxfile'):
+        validate_device_props(args)
+        validate_smis_props(args)        
     else:
-        if(args.deviceip and args.deviceport and args.user and args.serialnum):
-            if(not common.validate_port_number(args.deviceport)):
-                raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: -deviceport " + 
-                               str(args.deviceport) + " is not a valid port number") 
-        else:
-            raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: For device type " + args.type + 
-                            " -user, -deviceip, -deviceport and -serialnumber are required")
-    
+        validate_device_props(args)
+            
+    obj = StorageSystem(args.ip, args.port)
     passwd = None
     if (args.user and len(args.user) > 0):
-        
-        if sys.stdin.isatty():
-            passwd = getpass.getpass(prompt="Enter password of the storage system: ")
-        else:
-            passwd = sys.stdin.readline().rstrip()
-                
-        if (len(passwd) > 0):
-            if sys.stdin.isatty():
-                confirm_passwd = getpass.getpass(prompt="Retype password: ")
-            else:
-                confirm_passwd = sys.stdin.readline().rstrip()
-            if (confirm_passwd != passwd):
-                raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                        " " + sys.argv[2] + ": error: Passwords mismatch")
-        else:
-            raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: Invalid password")
+        passwd = obj.get_password("storage system")
             
     smis_passwd = None
     if (args.smisuser and len(args.smisuser) > 0):
-        
-        if sys.stdin.isatty():
-            smis_passwd = getpass.getpass(prompt="Enter password of the SMIS provider: ")
-        else:
-            smis_passwd = sys.stdin.readline().rstrip()
-        if (len(smis_passwd) > 0):
-            if sys.stdin.isatty():
-                confirm_smis_passwd = getpass.getpass(prompt="Retype password: ")
-            else:
-                confirm_smis_passwd = sys.stdin.readline().rstrip()
-            if (confirm_smis_passwd != smis_passwd):
-                raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: Passwords mismatch")
-        else:
-            raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
-                           " " + sys.argv[2] + ": error: Invalid password")
-        
-    obj = StorageSystem(args.ip, args.port)
+        smis_passwd = obj.get_password("SMI-S provider")        
+    
     try:
         if (not args.usessl):
             args.usessl = False
@@ -579,12 +591,38 @@ def storagesystem_create(args):
                          args.smisport, args.usessl,
                          args.smisuser, smis_passwd)
     except SOSError as e:
-        if (e.err_code in [SOSError.NOT_FOUND_ERR,
-                           SOSError.ENTRY_ALREADY_EXISTS_ERR]):
-            raise SOSError(e.err_code, "Storage system " + 
-                           args.name + ": Create failed\n" + e.err_text)
-        else:
-            raise e
+        common.print_err_msg_and_exit("create", "storagesystem", e.err_text, e.err_code)
+        
+'''
+This method checks if SMI-S provider properties are supplied or not
+'''
+def validate_smis_props(arguments):
+    if(arguments.smisip is None or arguments.smisport is None or arguments.smisuser is None):
+        errorMessage = "For device type "+arguments.type+" -smisuser, -smisip and -smisport are required"
+        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+    
+    #Here means, SMI-S props are supplied
+    #check if the SMI-S port is valid one
+    if(not common.validate_port_number(arguments.smisport)):
+        errorMessage = "-smisport " +  str(arguments.smisport) + " is not a valid port number"
+        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+
+'''
+This method validates the properties required for the storage system not managed by SMI-S provider
+'''
+def validate_device_props(arguments):
+    if(arguments.deviceip is None or arguments.deviceport is None or arguments.user is None):
+        errorMessage = "For device type "+arguments.type+" -user, -deviceip, and -deviceport are required"
+        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+    
+    #Here means, device props are supplied
+    #check if the device port is valid one
+    if(not common.validate_port_number(arguments.deviceport)):
+        errorMessage = "-deviceport " +  str(arguments.deviceport) + " is not a valid port number"
+        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+        
+
+
         
 def delete_parser(subcommand_parsers, common_parser):
     delete_parser = subcommand_parsers.add_parser('delete',
@@ -700,9 +738,7 @@ def storagesystem_unregister(args):
         
     except SOSError as e:
         if (e.err_code == SOSError.NOT_FOUND_ERR):
-            raise SOSError(SOSError.NOT_FOUND_ERR,
-                           "Storage system " + args.name + 
-                           ": Deregister failed\n" + e.err_text)
+            common.print_err_msg_and_exit("deregister", "storagesystem", e.err_text, e.err_code)
         else:
             raise e
 
@@ -812,10 +848,12 @@ def storagesystem_list(args):
             smis_provider_list.append(obj.smis_device_show_by_uri(item['id']))
         if(args.type is None):
             storage_system_list = obj.list_systems_by_query()
-            output = remove_duplicates_by_id(smis_provider_list, storage_system_list)
+            output = populate_name_from_native_guid(storage_system_list)
+            output = remove_duplicates_by_id(smis_provider_list, output)
         else:
             storage_system_list = obj.list_systems_by_query(type=args.type)
-            result = remove_duplicates_by_id(smis_provider_list, storage_system_list)
+            result = populate_name_from_native_guid(storage_system_list)
+            result = remove_duplicates_by_id(smis_provider_list, result)
             output = []
             for record in result:
                 if("system_type" in record and record["system_type"]):
@@ -844,6 +882,16 @@ def storagesystem_list(args):
             return 
     except SOSError as e:
         raise e
+    
+def populate_name_from_native_guid(storage_system_list):
+    output = []
+    for system in storage_system_list:
+        output.append(system);
+        
+        if("name" not in system and "native_guid" in system):
+            system["name"] = system["native_guid"]        
+    
+    return output
 
 def remove_duplicates_by_id(smis_provider_list, storage_system_list):
     
@@ -862,14 +910,148 @@ def remove_duplicates_by_id(smis_provider_list, storage_system_list):
                     
     for provider in smis_provider_list:
         if(provider != None):
-            if(provider["inactive"] == False and provider["job_discovery_status"] != "COMPLETE"):
+            if(provider["inactive"] == False and provider["job_scan_status"] != "COMPLETE"):
                 provider["provider_name"] = provider["name"]
                 del provider["name"]
                 output.append(provider)
         
     return output
-    
 
+# update command parser
+def update_parser(subcommand_parsers, common_parser):
+    update_parser = subcommand_parsers.add_parser('update',
+                                description='StorageOS Storage system Update CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Updates a storage system')
+    mandatory_args = update_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-sn', '-serialnumber',
+                                metavar='<serialnumber>',
+                                dest='serialnumber',
+                                help='Serial number of existing storage system to be updated',
+                                required=True)
+    mandatory_args.add_argument('-t', '-type',
+                               choices=StorageSystem.SYSTEM_TYPE_LIST,
+                               dest='type',
+                               help='Type of storage system',
+                               required=True)
+    
+    update_parser.add_argument('-mr','-maxresources',
+                                metavar='<maxresources>',
+                                dest='maxresources',
+                                help='Maximum number of resources')
+    update_parser.add_argument('-nn', '-newname',
+                                metavar='<newname>',
+                                dest='newname',
+                                help='New name of storage system')
+    update_parser.add_argument('-ndip', '-newipaddress',
+                                metavar='<newipaddress>',
+                                dest='newipaddress',
+                                help='New IP address of storage system')
+    update_parser.add_argument('-ndp', '-newport',
+                                metavar='<newport>',
+                                dest='newport',
+                                help='New port for storage system')
+    update_parser.add_argument('-nun', '-newusername',
+                                metavar='<newusername>',
+                                dest='newusername',
+                                help='New user name for storage system')
+    '''
+    Adding these options and commenting for now.
+    The current implementation of API for SMI-S update does not validate 
+    the connection after its details are updated.
+    
+    update_parser.add_argument('-nsip', '-newsmisproviderip',
+                                metavar='<newsmisproviderip>',
+                                dest='newsmisproviderip',
+                                help='New smis provider IP address for storage system')
+    update_parser.add_argument('-nsp', '-newsmisport',
+                                metavar='<newsmisport>',
+                                dest='newsmisport',
+                                help='New smis port for storage system')
+    update_parser.add_argument('-nsun', '-newsmisusername',
+                                metavar='<newsmisusername>',
+                                dest='newsmisusername',
+                                help='New smis user name for storage system')
+    update_parser.add_argument('-nspw', '-newsmispassword',
+                                metavar='<newsmispassword>',
+                                dest='newsmispassword',
+                                help='New smis password for storage system')
+    update_parser.add_argument('-nssl', '-newsmisusessl',
+                                metavar='<newsmisusessl>',
+                                dest='newsmisusessl',
+                                help='New smis use ssl for storage system')
+    '''
+    update_parser.set_defaults(func=update_storagesystem)
+    
+#Update is added only for storage systems as the API does connectivity check during update invoke
+#TODO : Need to enhance it for SMI-S provider once API team implements the connectivity check during the update
+def update_storagesystem(args):
+    
+    #Validations
+    if(args.newname is None and args.newipaddress is None 
+       and args.newport is None and args.newusername is None and args.maxresources is None):
+        raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
+                           " " + sys.argv[2] + ": error:"+ "At least one of the arguments :" 
+                                                                                "-newname -newport "
+                                                                                "-newipaddress -newusername -maxresources"
+                                                                                " should be provided to update the storage system")
+    obj = StorageSystem(args.ip, args.port)    
+    if(args.newusername and len(args.newusername)>0):
+        devicePassword = obj.get_password("storage system")
+    
+    # Capture the input details of array to be updated.        
+    serialNumber = args.serialnumber
+    arrayType = args.type
+        
+    
+    
+    #Get the storage systems matching the type and the serial number
+    deviceId = obj.query_by_serial_number_and_type(serialNumber, arrayType)
+    
+    if(deviceId):
+        # Found the device. 
+        # Create new empty request. 
+        request = dict();
+        #Add all modifiable attributes to the request
+        if(args.newname is not None):
+            request["name"] = args.newname
+        if(args.newipaddress is not None):
+            request["ip_address"] = args.newipaddress
+        if(args.newport is not None):
+            request["port_number"] = args.newport
+        if(args.newusername is not None):
+            request["user_name"] = args.newusername
+            request["password"] = devicePassword
+        if(args.maxresources is not None):
+            request["max_resources"] = args.maxresources
+            
+        '''
+        Adding this code for future
+        Uncomment once the SMI-S update API validates the connectivity.
+        
+        if (args.type in ['vnxblock', 'vmax']):
+            #Read the SMIS provider info for vnxblock and vmax type arrays
+            if(args.newsmisproviderip is not None):
+                request["smis_provider_ip"] = args.newsmisproviderip
+            if(args.newsmisport is not None):
+                request["smis_port_number"] = args.newsmisport
+            if(args.newsmisusername is not None):
+                request["smis_user_name"] = args.newsmisusername
+            if(args.newsmispassword is not None):
+                request["smis_password"] = args.newsmispassword
+            if(args.newsmisusessl is not None):
+                request["smis_use_ssl"] = args.newsmisusessl
+        '''
+        
+        # Convert the request into json format
+        body = json.dumps(request)
+        
+        #Call the update API
+        obj.update(deviceId, body)
+    
+    return
+    
 #
 # Storage device Main parser routine
 #
@@ -887,7 +1069,7 @@ def storagesystem_parser(parent_subparser, common_parser):
     create_parser(subcommand_parsers, common_parser)
     
     # delete command parser
-    # delete_parser(subcommand_parsers, common_parser)
+    delete_parser(subcommand_parsers, common_parser)
     
     # register command parser
     # register_parser(subcommand_parsers, common_parser)
@@ -896,7 +1078,7 @@ def storagesystem_parser(parent_subparser, common_parser):
     discover_parser(subcommand_parsers, common_parser)
 
     # unregister command parser
-    # unregister_parser(subcommand_parsers, common_parser)
+    unregister_parser(subcommand_parsers, common_parser)
 
     # show command parser
     show_parser(subcommand_parsers, common_parser)
@@ -906,6 +1088,9 @@ def storagesystem_parser(parent_subparser, common_parser):
 
     # list command parser
     list_parser(subcommand_parsers, common_parser)
+    
+    # update storage system command parser
+    update_parser(subcommand_parsers, common_parser)
     
 
 

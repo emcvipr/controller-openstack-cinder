@@ -75,7 +75,7 @@ class EMCViPRDriverCommon():
         if ports is not None and len(ports) > 0:
             port = ports[0].toxml().replace('<ViPRPort>', '')
             port = port.replace('</ViPRPort>', '')
-            self.port = port
+            self.port = int(port)
             LOG.debug(_("ViPR Port: %(port)s") % (locals()))
         if fqdn is None or port is None:
             LOG.debug(_("ViPR server not found."))

@@ -146,10 +146,10 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
         cookiefile = COOKIE
         form_cookiefile = None
         if (cookiefile is None):
-            install_dir = getenv('SDS_CLI_INSTALL_DIR')
+            install_dir = getenv('VIPR_CLI_INSTALL_DIR')
             if (install_dir is None):
                 raise SOSError(SOSError.NOT_FOUND_ERR,
-                    "SDS_CLI_INSTALL_DIR is not set. Please execute sdscli.profile\n")
+                    "VIPR_CLI_INSTALL_DIR is not set. Please execute viprcli.profile\n")
             if sys.platform.startswith('linux'):
                 parentshellpid = os.getppid()
                 if (parentshellpid is not None):
@@ -196,7 +196,7 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
         headers[SEC_AUTHTOKEN_HEADER] = token    
         if (http_method == 'GET'):
             response = requests.get(url, headers=headers, verify=False, cookies=cookiejar)
-
+            
 	    if(filename):
                 try:
                     with open(filename, 'wb') as fp:
@@ -216,13 +216,18 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
             response = requests.delete(url, headers=headers, verify=False, cookies=cookiejar)
         else:
             raise SOSError(SOSError.HTTP_ERR, "Unknown/Unsupported HTTP method: " + http_method)
+    
 
 	if (response.status_code == requests.codes['ok'] or response.status_code == 202):
             return (response.text, response.headers)
         else:
             error_msg = None
             if(response.status_code == 500):
-                error_msg = "StorageOS internal server error"
+                responseText = json_decode(response.text)
+                errorDetails = ""
+                if('details' in responseText):
+                    errorDetails = responseText['details']
+                error_msg = "StorageOS internal server error. Error details: "+errorDetails 
             elif(response.status_code == 401):
                 error_msg = "Access forbidden: Authentication required"
             elif(response.status_code == 403):
@@ -238,13 +243,14 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
                 if isinstance(error_msg, unicode):
                     error_msg = error_msg.encode('utf-8')
             raise SOSError(SOSError.HTTP_ERR, "HTTP code: " + str(response.status_code) + 
-                           ", response: " + response.reason + " [" + error_msg + "]")
+                           ", Reason: " + response.reason + " [" + error_msg + "]")
 
     except (SOSError, socket.error, SSLError, 
             ConnectionError, TooManyRedirects, Timeout) as e:
-        raise SOSError(SOSError.HTTP_ERR, "error: " + str(e))
+        raise SOSError(SOSError.HTTP_ERR, str(e))
+    #TODO : Either following exception should have proper message or IOError should just be combined with the above statement
     except IOError as e:
-        raise SOSError(SOSError.HTTP_ERR, "error: " + str(e))
+        raise SOSError(SOSError.HTTP_ERR, str(e))
     
 def is_uri(name):
     '''
@@ -506,12 +512,12 @@ def getenv(envvarname, envdefaultvalue=None):
         soscli_dir_path = os.path.dirname(os.path.dirname(
                                 os.path.abspath(sys.argv[0])))
         if sys.platform.startswith('win'):
-            soscli_abs_path = os.path.join(soscli_dir_path, 'sdscli.profile.bat')
+            soscli_abs_path = os.path.join(soscli_dir_path, 'viprcli.profile.bat')
         else:
-            soscli_abs_path = os.path.join(soscli_dir_path, 'sdscli.profile')
+            soscli_abs_path = os.path.join(soscli_dir_path, 'viprcli.profile')
         sosenv = os.getenv(envvarname)
         if (sosenv is None):
-            # read the value from sdscli.profile
+            # read the value from viprcli.profile
             configfile = open(soscli_abs_path, "r")
             if (configfile):
                 line = configfile.readline()
@@ -545,19 +551,52 @@ def getenv(envvarname, envdefaultvalue=None):
                 sosenv=envdefaultvalue
             else:
                 sosenv=None
-        if (envvarname == 'SDS_HOSTNAME'):
+        if (envvarname == 'VIPR_HOSTNAME'):
             if (sosenv) and (sosenv != 'localhost'):
                 return sosenv
             sosenv=socket.getfqdn()
             if (sosenv is None):
                 sosenv='localhost'
-        elif (envvarname == 'SDS_PORT'):
+        elif (envvarname == 'VIPR_PORT'):
             if (sosenv is None):
-                sosenv='443'
-        elif (envvarname == 'SDS_CLI_INSTALL_DIR'):
+                sosenv='4443'
+        elif (envvarname == 'VIPR_CLI_INSTALL_DIR'):
             if (sosenv is None):
                 sosenv=soscli_dir_path
     return sosenv
+
+#This method defines the standard and consistent error message format
+#for all CLI error messages. 
+#
+#Use it for any error message to be displayed
+'''
+@operationType create, update, add, etc
+@component storagesystem, filesystem, vpool, etc
+@errorCode Error code from the API call
+@errorMessage Detailed error message
+'''
+def print_err_msg_and_exit(operationType, component, errorMessage, errorCode):
+    print "Error: Failed to "+operationType+" "+component
+    if(errorMessage.startswith("\"\'") and errorMessage.endswith("\'\"")):
+        #stripping the first 2 and last 2 characters, which are quotes.
+        print errorMessage[2:len(errorMessage)-2]
+    else:
+        print errorMessage
+    
+    #Mark the status code and exit
+    exit_gracefully(errorCode)
+
+'''
+Terminate the script execution with status code.
+Ignoring the exit status code means the script execution completed successfully
+exit_status_code = 0, means success, its a default behavior
+exit_status_code = integer greater than zero, abnormal termination
+
+'''       
+def exit_gracefully(exit_status_code):
+    sys.exit(exit_status_code)
+    
+    
 
 class SOSError(Exception):
     '''

@@ -479,7 +479,7 @@ class Snapshot(object):
                     # cancel the timer
                     t.cancel()
                     raise SOSError(SOSError.VALUE_ERR, 
-                                   "Task: " + op_id + " is in ERROR state")
+                                   "Task: ["+ op_id +"], "+ out["message"] )
 
             if(self.isTimeout):
                 print "Operation timed out"

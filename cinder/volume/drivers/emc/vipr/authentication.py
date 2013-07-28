@@ -33,8 +33,12 @@ class Authentication(object):
     #Commonly used URIs for the 'Authentication' module
     URI_SERVICES_BASE               = ''
     URI_AUTHENTICATION = '/login'
-    URI_ZONE_AUTHN_PROFILE = URI_SERVICES_BASE + '/zone/admin/authnproviders'
-    URI_ZONE_AUTHN_PROFILES = URI_SERVICES_BASE + '/zone/admin/authnproviders/{0}'
+    URI_VDC_AUTHN_PROFILE = URI_SERVICES_BASE + '/vdc/admin/authnproviders'
+    URI_VDC_AUTHN_PROFILES = URI_SERVICES_BASE + '/vdc/admin/authnproviders/{0}'
+    URI_VDC_ROLES =  URI_SERVICES_BASE + '/vdc/role-assignments'
+    
+    URI_LOGOUT                      = URI_SERVICES_BASE + '/logout'
+
     HEADERS = {'Content-Type': 'application/json', 'ACCEPT': 'application/json', 'X-EMC-REST-CLIENT': 'TRUE'}
     
     def __init__(self, ipAddr, port):
@@ -55,44 +59,61 @@ class Authentication(object):
         '''
         SEC_REDIRECT                = 302 
         SEC_AUTHTOKEN_HEADER        = 'X-SDS-AUTH-TOKEN' 
+        LB_API_PORT                 = 4443    # Port on which load-balancer/reverse-proxy listens to all incoming requests for ViPR REST APIs
+        APISVC_PORT                 = 8443    # Port on which apisvc listens to incoming requests
         
         cookiejar=cookielib.LWPCookieJar()
 
-        url = 'https://'+str(self.__ipAddr)+self.URI_AUTHENTICATION
+        url = 'https://'+str(self.__ipAddr)+':'+str(self.__port)+self.URI_AUTHENTICATION
+
         try:
-            login_response = requests.get(url, headers=self.HEADERS, verify=False,
+            if(self.__port == APISVC_PORT):
+                login_response = requests.get(url, headers=self.HEADERS, verify=False,
                                           auth=(username,password), cookies=cookiejar, allow_redirects=False, timeout=common.TIMEOUT_SEC)
-        
-            if(login_response.status_code == SEC_REDIRECT):
-                location = login_response.headers['Location'] 
-                if(not location): 
-                   raise SOSError(SOSError.HTTP_ERR, "The redirect location of the authentication service is not provided") 
-                # Make the second request 
-                login_response = requests.get(location, headers=self.HEADERS, verify=False, cookies=cookiejar, 
-                                                    allow_redirects=False, timeout=common.TIMEOUT_SEC) 
-                if(not login_response.status_code == requests.codes['unauthorized']): 
-                    raise SOSError(SOSError.HTTP_ERR, "The authentication service failed to reply with 401")
- 
-                # Now provide the credentials 
-                login_response = requests.get(location, headers=self.HEADERS, auth=(username,password), verify=False, 
-                                           cookies=cookiejar, allow_redirects=False, timeout=common.TIMEOUT_SEC) 
-                if(not login_response.status_code == SEC_REDIRECT): 
-                    raise SOSError(SOSError.HTTP_ERR, "Access forbidden: Authentication required") 
-                location = login_response.headers['Location'] 
-                if(not location): 
-                    raise SOSError(SOSError.HTTP_ERR, "The authentication service failed to provide the location of the service URI when redirecting back") 
+                if(login_response.status_code == SEC_REDIRECT):
+                    location = login_response.headers['Location'] 
+                    if(not location): 
+                       raise SOSError(SOSError.HTTP_ERR, "The redirect location of the authentication service is not provided") 
+                    # Make the second request 
+                    login_response = requests.get(location, headers=self.HEADERS, verify=False, cookies=cookiejar, 
+                                                        allow_redirects=False, timeout=common.TIMEOUT_SEC) 
+                    if(not login_response.status_code == requests.codes['unauthorized']): 
+                        raise SOSError(SOSError.HTTP_ERR, "The authentication service failed to reply with 401")
+     
+                    # Now provide the credentials 
+                    login_response = requests.get(location, headers=self.HEADERS, auth=(username,password), verify=False, 
+                                               cookies=cookiejar, allow_redirects=False, timeout=common.TIMEOUT_SEC) 
+                    if(not login_response.status_code == SEC_REDIRECT): 
+                        raise SOSError(SOSError.HTTP_ERR, "Access forbidden: Authentication required") 
+                    location = login_response.headers['Location'] 
+                    if(not location): 
+                        raise SOSError(SOSError.HTTP_ERR, "The authentication service failed to provide the location of the service URI when redirecting back") 
+                    authToken = login_response.headers[SEC_AUTHTOKEN_HEADER] 
+                    if (not authToken): 
+                        raise SOSError(SOSError.HTTP_ERR, "The token is not generated by authentication service") 
+                    # Make the final call to get the page with the token 
+                    newHeaders = self.HEADERS 
+                    newHeaders[SEC_AUTHTOKEN_HEADER] = authToken 
+                    login_response = requests.get(location, headers=newHeaders, verify=False, cookies=cookiejar, 
+                                              allow_redirects=False, timeout=common.TIMEOUT_SEC) 
+                    if(login_response.status_code != requests.codes['ok']): 
+                        raise SOSError(SOSError.HTTP_ERR, "Login failure code: " + str(login_response.status_code) + " Error: " + login_response.text)
+            elif(self.__port == LB_API_PORT):
+                login_response = requests.get(url, headers=self.HEADERS, verify=False, cookies=cookiejar, allow_redirects=False)
+                if(login_response.status_code == requests.codes['unauthorized']):
+                    # Now provide the credentials
+                    login_response = requests.get(url, headers=self.HEADERS, auth=(username,password), verify=False, cookies=cookiejar, allow_redirects=False)
                 authToken = login_response.headers[SEC_AUTHTOKEN_HEADER] 
-                if (not authToken): 
-                    raise SOSError(SOSError.HTTP_ERR, "The token is not generated by authentication service") 
-                # Make the final call to get the page with the token 
-                newHeaders = self.HEADERS 
-                newHeaders[SEC_AUTHTOKEN_HEADER] = authToken 
-                login_response = requests.get(location, headers=newHeaders, verify=False, cookies=cookiejar, 
-                                          allow_redirects=False, timeout=common.TIMEOUT_SEC) 
-                if(login_response.status_code != requests.codes['ok']): 
-                    raise SOSError(SOSError.HTTP_ERR, "Login failure code: " + str(login_response.status_code) + " Error: " + login_response.text)
-  
-            
+            else:
+                raise SOSError(SOSError.HTTP_ERR, "Incorrect port number.  Load balanced port is: " +
+                    str(LB_API_PORT) +
+                    ", api service port is: " +
+                    str(APISVC_PORT) +
+                    ".")
+
+            if (not authToken):
+                raise SOSError(SOSError.HTTP_ERR, "The token is not generated by authentication service")    
+
             if (login_response.status_code != requests.codes['ok']):
                 error_msg=None
                 if(login_response.status_code == 401):
@@ -146,7 +167,7 @@ class Authentication(object):
             form_cookiefile = cookiedir+'/'+cookiefile
             installdir_cookie = '/cookie/cookiefile'
 	try:
-            if(not os.path.isfile(form_cookiefile) and common.create_file(form_cookiefile)):
+            if(common.create_file(form_cookiefile)):
                 tokenFile = open(form_cookiefile , "w") 
                 if(tokenFile):
                     tokenFile.write(authToken) 
@@ -165,7 +186,7 @@ class Authentication(object):
 
         if (common.create_file(form_cookiefile)):
             #cookiejar.save(form_cookiefile, ignore_discard=True, ignore_expires=True);
-            sos_cli_install_dir= common.getenv('SDS_CLI_INSTALL_DIR')
+            sos_cli_install_dir= common.getenv('VIPR_CLI_INSTALL_DIR')
             if (sos_cli_install_dir):
                 if (not os.path.isdir(sos_cli_install_dir)):  
                     raise SOSError(SOSError.NOT_FOUND_ERR,
@@ -189,9 +210,29 @@ class Authentication(object):
             
             else:
                 raise SOSError(SOSError.NOT_FOUND_ERR,
-                    "SDS_CLI_INSTALL_DIR is not set. Please check sdscli.profile")
+                    "VIPR_CLI_INSTALL_DIR is not set. Please check viprcli.profile")
         return ret_val
 
+
+    def logout_user(self):
+        '''
+        Makes REST API call to generate the cookiefile for the 
+        specified user after validation.
+        Returns:
+            SUCCESS OR FAILURE
+        '''
+        SEC_REDIRECT                = 302 
+        SEC_AUTHTOKEN_HEADER        = 'X-SDS-AUTH-TOKEN' 
+        
+
+        try:
+	    (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             Authentication.URI_LOGOUT,
+                                             None)
+	    return s
+
+    	except SOSError as e:
+	    raise e
 
 
     def add_authentication_provider(self, mode , url, certificate, managerdn, managerpwd, searchbase, searchfilter, searchkey, groupattr, 
@@ -222,7 +263,7 @@ class Authentication(object):
 
 
 	(s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
-                                             Authentication.URI_ZONE_AUTHN_PROFILE,
+                                             Authentication.URI_VDC_AUTHN_PROFILE,
                                              body)
 	
 
@@ -234,7 +275,7 @@ class Authentication(object):
             SUCCESS OR FAILURE
 	'''
 	(s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
-                                             Authentication.URI_ZONE_AUTHN_PROFILE,
+                                             Authentication.URI_VDC_AUTHN_PROFILE,
                                              None)
 
 	o = common.json_decode(s)
@@ -291,7 +332,7 @@ class Authentication(object):
 	'''
 
 	(s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
-                                             Authentication.URI_ZONE_AUTHN_PROFILES.format(uri),
+                                             Authentication.URI_VDC_AUTHN_PROFILES.format(uri),
                                              None)
 
 	if(xml==False):
@@ -320,7 +361,7 @@ class Authentication(object):
             body = json.dumps(parms)
 
 	    (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
-                                             Authentication.URI_ZONE_AUTHN_PROFILES.format(uri),
+                                             Authentication.URI_VDC_AUTHN_PROFILES.format(uri),
                                              body)
 	else:
             uris = self.list_authentication_provider()
@@ -329,8 +370,77 @@ class Authentication(object):
                 body = json.dumps(parms)
 
 	        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
-                                             Authentication.URI_ZONE_AUTHN_PROFILES.format(uri['id']),
+                                             Authentication.URI_VDC_AUTHN_PROFILES.format(uri['id']),
                                              body)
+
+
+
+
+    def add_vdc_role(self, role, subject_id, group):
+        '''
+        Makes a REST API call to add vdc role
+         '''
+
+        if(subject_id):
+            objecttype = 'subject_id'
+            objectname = subject_id
+        else:
+            objecttype = 'group'
+            objectname = group
+
+        parms = {
+                 "add" : [ { "role" : [role], objecttype : objectname }]
+                 }
+
+        body = json.dumps(parms)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                                             Authentication.URI_VDC_ROLES,
+                                             body)
+
+
+
+    def list_vdc_role(self):
+        '''
+        Makes a REST API call to add vdc role
+         '''
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             Authentication.URI_VDC_ROLES,
+                                             None)
+
+        o = common.json_decode(s)
+
+	return o
+
+
+    def delete_vdc_role(self, role, subject_id, group):
+        '''
+        Makes a REST API call to add vdc role
+         '''
+
+        if(subject_id):
+            objecttype = 'subject_id'
+            objectname = subject_id
+        else:
+            objecttype = 'group'
+            objectname = group
+
+        parms = {
+                 "remove" : [ { "role" : [role], objecttype : objectname }]
+                 }
+
+        body = json.dumps(parms)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                                             Authentication.URI_VDC_ROLES,
+                                             body)
+
+
+
+
+
+
 
 
 def add_authentication_provider(args):
@@ -376,7 +486,7 @@ def show_authentication_provider(args):
     obj = Authentication(args.ip, args.port)
     try:
         res = obj.show_authentication_provider(args.name, args.xml)
-        return res
+	return common.format_json_object(res)
     except SOSError as e:
         raise e
 
@@ -473,7 +583,38 @@ def authenticate_parser(parent_subparser, sos_ip, sos_port):
     authenticate_parser.set_defaults(func=authenticate_user)
     
 
+def logout_user(args):
+    obj = Authentication(args.ip, args.port)
+    try:
+        res = obj.logout_user()
+    except SOSError as e:
+        raise e
 
+def logout_parser(parent_subparser, sos_ip, sos_port):
+    # main authentication parser
+
+    logout_parser = parent_subparser.add_parser('logout',
+                                description='SOS authentication CLI usage',
+                                conflict_handler='resolve',
+                                help='Authenticate SOS user')
+    logout_parser.add_argument('-cf', '-cookiefile',
+                metavar='<cookiefile>',
+                                help='filename for storing cookie information',
+                dest='cookiefile')
+    logout_parser.add_argument('-hostname', '-hn',
+                metavar='<hostname>',
+                default=sos_ip,
+                dest='ip',
+                help='Hostname (fully qualifiled domain name) of SOS')
+    logout_parser.add_argument('-port', '-po',
+                type=int,
+                metavar='<port_number>',
+                default=sos_port,
+                dest='port',
+                help='port number of SOS')
+
+
+    logout_parser.set_defaults(func=logout_user)
 
 
 def add_auth_provider_parser(subcommand_parsers , common_parser):
@@ -578,6 +719,126 @@ def list_auth_provider_parser(subcommand_parsers, common_parser):
 
 
 
+def add_vdc_role_parser(subcommand_parsers , common_parser):
+    # add command parser
+    add_vdc_role_parser = subcommand_parsers.add_parser('add-vdc-role',
+                                description='StorageOS Add vdc Role CLI usage.',
+                                conflict_handler='resolve',
+                                help='Add a vdc role to an user')
+
+    mandatory_args = add_vdc_role_parser.add_argument_group('mandatory arguments')
+
+    mandatory_args.add_argument('-role',
+                                 metavar='<role>',
+                                help='role to be added',
+                                dest='role',
+                                required=True,
+				choices=['SYSTEM_ADMIN', 'SECURITY_ADMIN' ])
+
+
+    arggroup =  add_vdc_role_parser.add_mutually_exclusive_group(required=True)
+
+    arggroup.add_argument('-subject-id', '-sb',
+                                help='Subject ID',
+                                dest='subjectid',
+                                metavar='<subjectid>')
+
+    arggroup.add_argument('-group', '-g',
+                             help='Group',
+                             dest='group',
+                             metavar='<group>')
+
+    add_vdc_role_parser.set_defaults(func=add_vdc_role)
+
+
+
+
+def add_vdc_role(args):
+    obj = Authentication(args.ip, args.port)
+
+    try:
+        res = obj.add_vdc_role(args.role, args.subjectid, args.group)
+    except SOSError as e:
+        raise e
+
+
+
+def list_vdc_role_parser(subcommand_parsers , common_parser):
+    # add command parser
+    list_vdc_role_parser = subcommand_parsers.add_parser('list-vdc-role',
+                                description='StorageOS Add vdc Role CLI usage.',
+                                conflict_handler='resolve',
+                                help='Add a vdc role to an user')
+
+
+    list_vdc_role_parser.set_defaults(func=list_vdc_role)
+
+
+
+
+def list_vdc_role(args):
+    obj = Authentication(args.ip, args.port)
+
+    try:
+        res = obj.list_vdc_role()
+	return common.format_json_object(res)
+    except SOSError as e:
+        raise e
+
+
+
+
+
+
+def delete_role_parser(subcommand_parsers, common_parser):
+    # register command parser
+    delete_role_parser = subcommand_parsers.add_parser('delete-role',
+                                description='StorageOS Storagepool update CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve')
+
+
+
+    mandatory_args = delete_role_parser.add_argument_group('mandatory arguments')
+
+
+    mandatory_args.add_argument('-role',
+                                 metavar='<role>',
+                                help='role to be added',
+                                dest='role',
+                                required=True,
+				choices=['SYSTEM_ADMIN', 'SECURITY_ADMIN' ])
+
+
+    arggroup =  delete_role_parser.add_mutually_exclusive_group(required=True)
+
+    arggroup.add_argument('-subject-id', '-sb',
+                                help='Subject ID',
+                                dest='subjectid',
+                                metavar='<subjectid>')
+
+    arggroup.add_argument('-group', '-g',
+                             help='Group',
+                             dest='group',
+                             metavar='<group>')
+
+
+    delete_role_parser.set_defaults(func=delete_vdc_role)
+
+
+
+def delete_vdc_role(args):
+    obj = Authentication(args.ip, args.port)
+
+    try:
+        res = obj.delete_vdc_role( args.role, args.subjectid, args.group)
+    except SOSError as e:
+        raise e
+
+
+
+
+
 def authentication_parser(parent_subparser, common_parser):
     # main authentication parser
     parser = parent_subparser.add_parser('authentication',
@@ -597,4 +858,8 @@ def authentication_parser(parent_subparser, common_parser):
 
     list_auth_provider_parser(subcommand_parsers , common_parser)
 
+    add_vdc_role_parser(subcommand_parsers , common_parser)
 
+    list_vdc_role_parser(subcommand_parsers , common_parser)
+
+    delete_role_parser(subcommand_parsers , common_parser)

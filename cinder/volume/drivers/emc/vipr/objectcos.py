@@ -22,7 +22,7 @@ class Objectcos(object):
 
     URI_SERVICES_BASE               = '' 
     URI_OBJ_COS                         = URI_SERVICES_BASE + '/{0}/object-stores'
-    URI_COS                         = URI_SERVICES_BASE + '/{0}/cos'
+    URI_COS                         = URI_SERVICES_BASE + '/{0}/vpool'
     URI_COS_INSTANCE                = URI_COS + '/{1}'
     URI_OBJ_COS_INSTANCE            = URI_OBJ_COS + '/{1}'
     URI_RESOURCE_DEACTIVATE      = '{0}/deactivate'
@@ -50,7 +50,7 @@ class Objectcos(object):
 	if (not o):
             return {};
         else:
-            return o['object_stores_list']
+            return o['object_store']
 
 
 
@@ -141,14 +141,14 @@ def add_parser(subcommand_parsers, common_parser):
 
     mandatory_args = add_parser.add_argument_group('mandatory arguments')
 
-    mandatory_args.add_argument('-name',
+    mandatory_args.add_argument('-name','-n',
                                 help='name',
                                 metavar='<name>',
                                 dest='name',
                                 required=True)
 
-    mandatory_args.add_argument('-description',
-                                help='description',
+    mandatory_args.add_argument('-description','-d',
+                                help='description of object cos',
                                 metavar='<description>',
                                 dest='description',
                                 required=True)
@@ -180,8 +180,8 @@ def delete_parser(subcommand_parsers, common_parser):
 
     mandatory_args = delete_parser.add_argument_group('mandatory arguments')
 
-    mandatory_args.add_argument('-name',
-                                help='name',
+    mandatory_args.add_argument('-name','-n',
+                                help='name of object  cos',
                                 metavar='<name>',
                                 dest='name',
                                 required=True)
@@ -204,15 +204,15 @@ def show_parser(subcommand_parsers, common_parser):
 
     # delete command parser
     show_parser = subcommand_parsers.add_parser('show',
-                                description='SOS Objectcos delete CLI usage.',
+                                description='SOS Objectcos show CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Delete an objectcos')
+                                help='Show an objectcos')
 
     mandatory_args = show_parser.add_argument_group('mandatory arguments')
 
-    mandatory_args.add_argument('-name',
-                                help='name',
+    mandatory_args.add_argument('-name','-n',
+                                help='name of object cos',
                                 metavar='<name>',
                                 dest='name',
                                 required=True)
@@ -235,10 +235,10 @@ def objectcos_show(args):
 def list_parser(subcommand_parsers, common_parser):
     # list command parser
     list_parser = subcommand_parsers.add_parser('list',
-                                description='SOS Objectcos Show CLI usage.',
+                                description='SOS Objectcos List CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Show an Objectcos')
+                                help='List an Objectcos')
 
     list_parser.set_defaults(func=objectcos_list)
 
@@ -254,8 +254,9 @@ def objectcos_list(args):
 	    tmp['objectcos']=iter['name']
             output.append(tmp)
 	
-	from common import TableGenerator
-        TableGenerator(output, [ 'objectcos']).printTable()
+	if(res):
+	    from common import TableGenerator
+            TableGenerator(output, [ 'objectcos']).printTable()
 
     except SOSError as e:
         if(e.err_code == SOSError.NOT_FOUND_ERR):

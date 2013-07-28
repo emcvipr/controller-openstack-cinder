@@ -17,7 +17,7 @@ import argparse
 import sys
 import os
 from common import SOSError
-from neighborhood import Neighborhood
+from virtualarray import VirtualArray
 import json
 from tenant import Tenant
 import getpass
@@ -26,7 +26,7 @@ class ProtectionSystem(object):
     The class definition for operations on 'Recovery point' and other protection systems. 
     '''
     
-    URI_PROTECTION_SYSTEMS	       	 = "/zone/protection-systems"
+    URI_PROTECTION_SYSTEMS	       	 = "/vdc/protection-systems"
     URI_PROTECTION_SYSTEM  		 = URI_PROTECTION_SYSTEMS + "/{0}" 
     URI_PROTECTION_SYSTEMS_DISCOVER_ALL  = URI_PROTECTION_SYSTEMS + "/discover"
     URI_PROTECTION_SYSTEM_DISCOVER       = URI_PROTECTION_SYSTEMS + "/{0}/discover"

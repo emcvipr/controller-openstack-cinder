@@ -26,16 +26,16 @@ class StoragePool(object):
     #Commonly used URIs for the 'Storage Pool' module
 
     URI_SERVICES_BASE  = ''
-    URI_STORAGEDEVICES = '/zone/storage-systems'
+    URI_STORAGEDEVICES = '/vdc/storage-systems'
     URI_STORAGEDEVICE  = URI_STORAGEDEVICES + '/{0}'
     URI_STORAGEPOOLS   = URI_STORAGEDEVICE + '/storage-pools'
     URI_STORAGEPOOL_SHOW   = URI_STORAGEPOOLS + '/{1}'
-    URI_STORAGEPOOL    = '/zone/storage-pools/{0}'
+    URI_STORAGEPOOL    = '/vdc/storage-pools/{0}'
     URI_STORAGEPOOL_REGISTER  = URI_STORAGEPOOLS   + '/{1}/register'
     URI_STORAGEPOOL_DEREGISTER  = URI_STORAGEPOOLS   + '/{1}/deregister'
     URI_DEREGISTER = URI_STORAGEPOOL + '/deregister'
-    URI_STORAGEPOOL_UPDATE  = '/zone/storage-pools/{0}'
-    URI_STORAGEPOOL_TIERS = '/zone/storage-pools/{0}/storage-tiers'
+    URI_STORAGEPOOL_UPDATE  = '/vdc/storage-pools/{0}'
+    URI_STORAGEPOOL_TIERS = '/vdc/storage-pools/{0}/storage-tiers'
     
     #SYSTEM_TYPE_LIST = ['isilon', 'vnxblock', 'vnxfile', 'vmax', 'netapp', 'vplex']
 
@@ -79,7 +79,7 @@ class StoragePool(object):
         if (not common.is_uri(devicename)):
             obj = StorageSystem(self.__ipAddr, self.__port)
 	    if(serialnumber):
-		device_id = obj.query_by_serial_number(serialnumber, devicetype)
+		device_id = obj.query_by_serial_number_and_type(serialnumber, devicetype)
 	    else:
                 device = obj.show(name=devicename, type=devicetype)        
                 device_id = device['id']
@@ -273,56 +273,59 @@ class StoragePool(object):
         o = common.json_decode(s)
 
         return o
-    def storagepool_update_by_uri(self, pooluri, neighborhoods):
+    def storagepool_update_by_uri(self, pooluri, varrays, maxresources):
         '''
         Updates a storagepool
         '''
         parms = dict()
         body = None
 
-	if( neighborhoods ):
-            parms['neighborhood_assignment_changes'] = neighborhoods
-            body = json.dumps(parms)
+        if (maxresources):
+            parms['max_resources'] = maxresources
 
-	#myuri = '/zone/storage-pools/'+ pooluri +'/matched-cos'
+	if( varrays ):
+            parms['varray_assignment_changes'] = varrays
+        body = json.dumps(parms)
+
+	#myuri = '/vdc/storage-pools/'+ pooluri +'/matched-vpool'
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT", 
                         StoragePool.URI_STORAGEPOOL_UPDATE.format(pooluri), body)
 
         o = common.json_decode(s)
         return o
 
-    def storagepool_update(self, storagesystem, serialnumber, devicetype, poolname, nhadds, nhrems, volumetype):
+    def storagepool_update(self, storagesystem, serialnumber, devicetype, poolname, nhadds, nhrems, volumetype, maxresources):
 
  	nhassignments = dict();
-        #parms['neighborhood_assignment_changes'] = nhassignments
+        #parms['varray_assignment_changes'] = nhassignments
         if (nhadds):
 	    nhlst = []
 	    for iter in nhadds:
-		from neighborhood import Neighborhood
-            	obj = Neighborhood(self.__ipAddr, self.__port)
+		from virtualarray import VirtualArray
+            	obj = VirtualArray(self.__ipAddr, self.__port)
 	                    
-	 	nbhuri = obj.neighborhood_query(iter)
+	 	nbhuri = obj.varray_query(iter)
 		if(nbhuri):
 		    nhlst.append(nbhuri)
 		
 		
 	    if(nhlst):
             	nh = dict();
-            	nh['neighborhood'] = nhlst
+            	nh['varrays'] = nhlst
             	nhassignments['add'] = nh;
         if (nhrems):
 	    nhlst = []
 	    for iter in nhrems:
-		from neighborhood import Neighborhood
-            	obj = Neighborhood(self.__ipAddr, self.__port)
+		from virtualarray import VirtualArray
+            	obj = VirtualArray(self.__ipAddr, self.__port)
 	                    
-	 	nbhuri = obj.neighborhood_query(iter)
+	 	nbhuri = obj.varray_query(iter)
 		if(nbhuri):
 		    nhlst.append(nbhuri)
 
 	    if(nhlst):
             	nh = dict();
-            	nh['neighborhood'] = nhlst
+            	nh['varrays'] = nhlst
             	nhassignments['remove'] = nh;
 
           
@@ -339,15 +342,15 @@ class StoragePool(object):
 	    if(poolname):
 	        if(storpool['pool_name'] == poolname):
 		    if ( (volumetype) and (storpool['supported_volume_types'] == volumetype) ):
-                    	self.storagepool_update_by_uri(storpool['id'], nhassignments) 
+                    	self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
 		    if (not volumetype):
-                    	self.storagepool_update_by_uri(storpool['id'], nhassignments) 
+                    	self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
 
 	    else:
 		if (not volumetype):
-                    self.storagepool_update_by_uri(storpool['id'], nhassignments) 
+                    self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
 		if ( (volumetype) and (storpool['supported_volume_types'] == volumetype) ):
-                    self.storagepool_update_by_uri(storpool['id'], nhassignments) 
+                    self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
 		
         
 
@@ -374,7 +377,7 @@ class StoragePool(object):
         obj_ss = StorageSystem(self.__ipAddr, self.__port)
 
         #uri = obj_ss.query_storagesystem_by_serial_number(serialnumber)        
-        systemuri = obj_ss.query_by_serial_number(serialnumber, deviceType)        
+        systemuri = obj_ss.query_by_serial_number_and_type(serialnumber, deviceType)        
 
 	pooluris = self.storagepool_list_by_uri(systemuri)
 
@@ -961,7 +964,7 @@ def storagepool_list(args):
         from storagesystem import StorageSystem
         sys = StorageSystem(args.ip, args.port)
 	if(args.serialnumber):
-	    device_id = sys.query_by_serial_number(args.serialnumber, args.type)
+	    device_id = sys.query_by_serial_number_and_type(args.serialnumber, args.type)
 	else:
             device = sys.show(name=args.storagesystem, type=args.type)        
             device_id = device['id']
@@ -972,13 +975,17 @@ def storagepool_list(args):
             result = obj.storagepool_show_by_uri(device_id,uri)
              #adding new column storage tier names assicated with pools
             if("tier_utilization_percentages" in result and args.long==True):
-                tiernamelst = []
-                returnlst   = []
-                #get list of storage tier objects
-                returnlst = obj.storagepool_get_tiers_by_uri(uri)
-                for item in returnlst:
-                    tiernamelst.append(item['name'])
-                result["storage_tiers"] = tiernamelst
+                tierUtilizationPercentages = result['tier_utilization_percentages']
+                #Go and fetch storage-tiers only if the utilization value is present
+                #Assumption here is, if there some utilization value, then such a pool has storage tiers
+                if(tierUtilizationPercentages is not None and len(tierUtilizationPercentages)>0):
+                    tiernamelst = []
+                    returnlst = []
+                    # get list of storage tier objects
+                    returnlst = obj.storagepool_get_tiers_by_uri(uri)
+                    for item in returnlst:
+                        tiernamelst.append(item['name'])
+                    result["storage_tiers"] = tiernamelst
                     
             if(result):
                 output.append(result)
@@ -1011,42 +1018,42 @@ def storagepool_list(args):
 
 	    if(args.long==True):
 		for iter in output:
-		    if(iter.has_key('cos_set')):
-			cosnames = ''
-		        for cositer in iter['cos_set']:
-			    from cos import Cos
-            		    obj = Cos(args.ip, args.port)
+		    if(iter.has_key('vpool_set')):
+			vpoolnames = ''
+		        for vpooliter in iter['vpool_set']:
+			    from virtualpool import VirtualPool
+            		    obj = VirtualPool(args.ip, args.port)
 	                    
 			    if(args.type in  ['isilon','vnxfile','netapp']):
-                	        costype = 'file'
+                	        vpooltype = 'file'
                             else:
-                                costype = 'block'
+                                vpooltype = 'block'
 
-	 	            cos = obj.cos_show_uri(costype , cositer['id'])
-			    if(cos):
-			        cosnames = cosnames + cos['name'] + ','
+	 	            vpool = obj.vpool_show_uri(vpooltype , vpooliter['id'])
+			    if(vpool):
+			        vpoolnames = vpoolnames + vpool['name'] + ','
 
-			if(len(cosnames) > 0):
-			    cosnames = cosnames[0:len(cosnames)-1]
+			if(len(vpoolnames) > 0):
+			    vpoolnames = vpoolnames[0:len(vpoolnames)-1]
 
-			iter['cos_set'] = cosnames
+			iter['vpool_set'] = vpoolnames
 
-		    if(iter.has_key('tagged_neighborhoods')):
+		    if(iter.has_key('tagged_varrays')):
 			nbhnames = ''
-		        for nbhiter in iter['tagged_neighborhoods']:
-			    from neighborhood import Neighborhood
-            		    obj = Neighborhood(args.ip, args.port)
+		        for nbhiter in iter['tagged_varrays']:
+			    from virtualarray import VirtualArray
+            		    obj = VirtualArray(args.ip, args.port)
 	                    
-	 	            nbh = obj.neighborhood_show(nbhiter)
+	 	            nbh = obj.varray_show(nbhiter)
 			    if(nbh):
 			        nbhnames = nbhnames + nbh['name'] + ','
 		    
 			if(len(nbhnames) > 0):
 			    nbhnames = nbhnames[0:len(nbhnames)-1]
-			iter['tagged_neighborhoods'] = nbhnames
+			iter['tagged_varrays'] = nbhnames
 
 		from common import TableGenerator
-            	TableGenerator(output, ['pool_name', 'registration_status'  ,'free','used','cos_set','tagged_neighborhoods', 'storage_tiers']).printTable()
+            	TableGenerator(output, ['pool_name', 'registration_status'  ,'free','used','vpool_set','tagged_varrays', 'storage_tiers']).printTable()
             else:
 		from common import TableGenerator
             	TableGenerator(output, ['pool_name', 'registration_status'  ,'free' ,'used']).printTable()
@@ -1097,23 +1104,28 @@ def update_parser(subcommand_parsers, common_parser):
                                 dest='name',
                                 metavar='name')
 
-    '''update_parser.add_argument('-cos',
-                                help = 'name of COS to be associated',
-                                dest='cos',
-                                metavar='cos')'''
+    '''update_parser.add_argument('-vpool',
+                                help = 'name of vpool to be associated',
+                                dest='vpool',
+                                metavar='vpool')'''
 
-    update_parser.add_argument('-nhadd',
-                                help = 'name of Neighborhoods to be associated',
+    update_parser.add_argument('-vaadd',
+                                help = 'name of varrays to be associated',
                                 dest='nhadd',
                                 metavar='nhadd',
                                 nargs="+")
 
 
-    update_parser.add_argument('-nhrem',
-                                help = 'name of Neighborhoods to be dis-associated',
+    update_parser.add_argument('-varem',
+                                help = 'name of varrays to be dis-associated',
                                 dest='nhrem',
                                 metavar='nhrem',
                                 nargs="+")
+				
+    update_parser.add_argument('-maxresources','-mr',
+                                help = 'Maximum number of resources',
+                                dest='maxresources',
+                                metavar='maxresources')
 				
     update_parser.add_argument('-volumetype',
                                 help = 'volume types to be associated with',
@@ -1127,7 +1139,7 @@ def storagepool_update(args):
     obj = StoragePool(args.ip, args.port)
     
     try:
-        res = obj.storagepool_update(args.storagesystem, args.serialnumber, args.type, args.name, args.nhadd, args.nhrem , args.volumetype)
+        res = obj.storagepool_update(args.storagesystem, args.serialnumber, args.type, args.name, args.nhadd, args.nhrem , args.volumetype, args.maxresources)
     except SOSError as e:
         if( e.err_code == SOSError.NOT_FOUND_ERR):
             raise SOSError(SOSError.NOT_FOUND_ERR, 

@@ -18,6 +18,7 @@ import os
 from common import SOSError
 from xml.etree import ElementTree
 
+
 class Upgrade(object):
     '''
     The class definition for authenticating the specified user 
@@ -34,6 +35,7 @@ class Upgrade(object):
     URI_IMAGE_UPLOAD='/upgrade/image/upload'
     
     DEFAULT_PORT="9993"
+    DEFAULT_SYSMGR_PORT = "4443"
     
     def __init__(self, ipAddr, port):
         '''
@@ -160,9 +162,11 @@ class Logging(object):
     '''
 
     #Commonly used URIs for Logging service
-    URI_LOGS = "/logs/"
+    URI_LOGS = "/logs"
+    URI_LOG_LEVELS = URI_LOGS + "/log-levels"
 
     DEFAULT_PORT="9993"
+    DEFAULT_SYSMGR_PORT = "4443"
 
     def __init__(self, ipAddr, port):
         '''
@@ -253,8 +257,14 @@ class Logging(object):
                                               "GET", self.URI_LOGS + params,
                                               None, None , False , None, tmppath)
 
-    	with open(tmppath) as infile:
-            resp = json.load(infile)
+        try:
+            with open(tmppath) as infile:
+                resp = json.load(infile)
+        except ValueError:
+            raise SOSError(SOSError.VALUE_ERR,
+                       "Failed to recognize JSON payload")
+        except Exception as e:
+            raise SOSError(e.errno, e.strerror)
 
 	
 	fp = None
@@ -288,7 +298,58 @@ class Logging(object):
         if(not resp):
             return None
 	
-                                                                     
+
+    def prepare_get_log_lvl_params(self, loglst, nodelst):
+        params = ''
+	if(loglst):
+            for log in loglst:
+                params += '&' if ('?' in params) else '?'
+                params += "log_name=" + log
+	if(nodelst):
+            for node in nodelst:
+                params += '&' if ('?' in params) else '?'
+                params += "node_id=" + node
+        return params
+
+
+    def get_log_level(self, loglst, nodelst):
+        request = ""
+            
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                              "GET", Logging.URI_LOG_LEVELS + self.prepare_get_log_lvl_params(loglst, nodelst),
+                                              None)
+        if(not s):
+            return None
+        o = common.json_decode(s)
+        return o
+	
+    def prepare_set_log_level_body(self , severity, logs, nodes):
+        params = {'severity' : int(severity)}
+        if ( logs ):
+            params['log_name'] = logs
+        if ( nodes  ):
+            params['node_id'] = nodes
+
+        return params
+
+
+    def set_log_level(self, severity, logs, nodes):
+        request = ""
+        
+	params = self.prepare_set_log_level_body(severity, logs, nodes)
+
+	if (params):
+            body = json.dumps(params)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                              "POST", Logging.URI_LOG_LEVELS ,
+                                              body)
+        if(not s):
+            return None
+        o = common.json_decode(s)
+        return o
+
+
 
 
 def get_logs_parser(subcommand_parsers, common_parser):
@@ -357,22 +418,83 @@ def get_logs(args):
     obj = Logging(args.ip, Logging.DEFAULT_PORT)
     from common import TableGenerator
     try:
- 	now = datetime.datetime.today()
-    	now_str = now.strftime("%Y-%m-%d_%H:%M:%S")
-	#print now_str
-    	diff = datetime.timedelta(minutes=30)
-    	start_str = (now - diff).strftime("%Y-%m-%d_%H:%M:%S")
-	#print start_str
-    	test_str = "TestString"
-
         res = obj.get_logs(args.log, args.severity,args.start, args.end, args.node, args.regex, args.xml,args.filepath)
     except SOSError as e:
-        raise e
+	common.print_err_msg_and_exit("get", "logs", e.err_text, e.err_code)
 
 
+def get_log_level_parser(subcommand_parsers, common_parser):
+    get_log_level_parser = subcommand_parsers.add_parser('get-log-level',
+                                description='StorageOS: CLI usage to get the logging level',
+                                conflict_handler='resolve',
+                                help='Get log level')
+
+    get_log_level_parser.add_argument('-logs', '-lg',
+                                metavar='<logs>',
+                                dest='logs',
+                                help='Logs Name',
+				nargs="+")
+
+    get_log_level_parser.add_argument('-nodes',
+                                metavar='<nodes>',
+                                dest='nodes',
+                                help='Nodes',
+                                nargs="+")
+
+    get_log_level_parser.set_defaults(func=get_log_level)
 
 
+def get_log_level(args):
+    obj = Logging(args.ip, Logging.DEFAULT_SYSMGR_PORT)
+    from common import TableGenerator
+    try:
+        res = obj.get_log_level(args.logs, args.nodes)
+	return common.format_json_object(res)
+    except SOSError as e:
+	common.print_err_msg_and_exit("get", "log level", e.err_text, e.err_code)
         
+
+def set_log_level_parser(subcommand_parsers, common_parser):
+    set_log_level_parser = subcommand_parsers.add_parser('set-log-level',
+                                description='StorageOS: CLI usage to set the logging level',
+                                conflict_handler='resolve',
+                                help='Set logging level')
+
+    set_log_level_parser.add_argument('-severity', '-sv',
+                                metavar='<severity>',
+                                dest='severity',
+                                help='Severity',
+				default='7')
+
+    set_log_level_parser.add_argument('-logs', '-lg',
+                                metavar='<logs>',
+                                dest='logs',
+                                help='Logs Name',
+				nargs="+")
+
+    set_log_level_parser.add_argument('-nodes',
+                                metavar='<nodes>',
+                                dest='nodes',
+                                help='Nodes',
+                                nargs="+")
+
+    '''set_log_level_parser.add_argument('-type',
+                                metavar='<type>',
+                                dest='type',
+                                help='type')'''
+
+    set_log_level_parser.set_defaults(func=set_log_level)
+
+
+def set_log_level(args):
+    obj = Logging(args.ip, Logging.DEFAULT_SYSMGR_PORT)
+    from common import TableGenerator
+    try:
+        res = obj.set_log_level(args.severity, args.logs, args.nodes)
+    except SOSError as e:
+	common.print_err_msg_and_exit("set", "log level", e.err_text, e.err_code)
+
+
 def get_cluster_state_parser(subcommand_parsers, common_parser):
 
     get_cluster_state_parser = subcommand_parsers.add_parser('get-cluster-state',
@@ -601,3 +723,6 @@ def system_parser(parent_subparser, common_parser):
     
     system_status_parser(subcommand_parsers, common_parser)
 
+    get_log_level_parser(subcommand_parsers, common_parser)
+
+    set_log_level_parser(subcommand_parsers, common_parser)

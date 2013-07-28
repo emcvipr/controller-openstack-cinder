@@ -14,7 +14,7 @@ import common
 import json
 from common import SOSError
 from threading import Timer
-from neighborhood import Neighborhood
+from virtualarray import VirtualArray
 from storagesystem import StorageSystem
 
 class Volume(object):
@@ -22,7 +22,7 @@ class Volume(object):
     The class definition for operations on 'Volume'. 
     '''
     #Commonly used URIs for the 'Volume' module
-    URI_SEARCH_VOLUMES = '/search?resource_type=volume&project={0}'
+    URI_SEARCH_VOLUMES = '/block/volumes/search?project={0}'
     URI_VOLUMES = '/block/volumes'
     URI_VOLUME = URI_VOLUMES + '/{0}'
     URI_VOLUME_CREATE = URI_VOLUMES + '?project={0}'
@@ -177,6 +177,7 @@ class Volume(object):
             else:
                 uri += '?remote=' + 'true'
       
+        
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "POST",
                                              uri,
@@ -459,18 +460,18 @@ class Volume(object):
                 
         
     
-    # Creates a volume given label, project, cos and size
-    def create(self, project, label, size, neighborhood, cos, 
+    # Creates a volume given label, project, vpool and size
+    def create(self, project, label, size, varray, vpool, 
                protocol, sync, number_of_volumes, thin_provisioned, protection, 
-               protection_neighborhoods, consistent_volume_label):
+               protection_varrays, consistent_volume_label):
         '''
         Makes REST API call to create volume under a project
         Parameters:
             project: name of the project under which the volume will be created
             label: name of volume
             size: size of volume
-            neighborhood: name of neighborhood
-            cos: name of cos
+            varray: name of varray
+            vpool: name of vpool
             protocol: protocol used for the volume (FC or iSCSI)
         Returns:
             Created task details in JSON response payload
@@ -525,26 +526,26 @@ class Volume(object):
                     raise e
                 
         
-        from cos import Cos
-        cos_obj = Cos(self.__ipAddr, self.__port)
-        cos_uri = cos_obj.cos_query(cos, "block")
+        from virtualpool import VirtualPool
+        vpool_obj = VirtualPool(self.__ipAddr, self.__port)
+        vpool_uri = vpool_obj.vpool_query(vpool, "block")
         
-        from neighborhood import Neighborhood
-        neighborhood_obj = Neighborhood(self.__ipAddr, self.__port)
-        neighborhood_uri = neighborhood_obj.neighborhood_query(neighborhood)
+        from virtualarray import VirtualArray
+        varray_obj = VirtualArray(self.__ipAddr, self.__port)
+        varray_uri = varray_obj.varray_query(varray)
         
-        protection_neighborhood_uris = []
-        if(protection_neighborhoods and len(protection_neighborhoods) > 0):
-            for nh in protection_neighborhoods:
-                nh_uri = neighborhood_obj.neighborhood_query(nh)
-                protection_neighborhood_uris.append(nh_uri)
+        protection_varray_uris = []
+        if(protection_varrays and len(protection_varrays) > 0):
+            for nh in protection_varrays:
+                nh_uri = varray_obj.varray_query(nh)
+                protection_varray_uris.append(nh_uri)
                 
         request = {
              'name' : label,
              'size' : size,
-             'neighborhood' : neighborhood_uri,
+             'varray' : varray_uri,
              'project' : project_uri,
-             'cos' : {'id' : cos_uri}
+             'vpool' : {'id' : vpool_uri}
             }
         if(protocol):
             request["protocols"] = protocol
@@ -552,8 +553,8 @@ class Volume(object):
             request["count"] = number_of_volumes
         if(thin_provisioned):
             request["thinly_provisioned"] = thin_provisioned
-        if(len(protection_neighborhood_uris) > 0):
-            request["protection_neighborhood"] = protection_neighborhood_uris
+        if(len(protection_varray_uris) > 0):
+            request["protection_varray"] = protection_varray_uris
         if (consistent_volume_label):
             consistent_volume_uri = self.volume_query(project + '/' + consistent_volume_label)
             request['snapshot_consistent_with'] =  consistent_volume_uri 
@@ -576,27 +577,27 @@ class Volume(object):
             return o
 
     # Update a volume information
-    def update(self, name, label, cos):
+    def update(self, name, label, vpool):
         '''
         Makes REST API call to update a volume information
         Parameters:
             name: name of the volume to be updated
             label: new name of the volume
-            cos: name of cos
+            vpool: name of vpool
         Returns
             Created task details in JSON response payload
         '''
         volume_uri = self.volume_query(name)
         
-        from cos import Cos
+        from virtualpool import VirtualPool
         
-        cos_obj = Cos(self.__ipAddr, self.__port)
-        cos_uri = cos_obj.cos_query(cos, "block")
+        vpool_obj = VirtualPool(self.__ipAddr, self.__port)
+        vpool_uri = vpool_obj.vpool_query(vpool, "block")
         
         body = json.dumps({'volume':
         {
          'name' : label,
-         'cos' : { "id" : cos_uri }
+         'vpool' : { "id" : vpool_uri }
         }
         })
         
@@ -902,15 +903,15 @@ def create_parser(subcommand_parsers, common_parser):
                                 metavar='<tenantname>',
                                 dest='tenant',
                                 help='Name of tenant')
-    mandatory_args.add_argument('-cos', '-c',
-                                help='Name of CoS',
-                                metavar='<cosname>',
-                                dest='cos',
+    mandatory_args.add_argument('-vpool', '-vp',
+                                help='Name of vpool',
+                                metavar='<vpoolname>',
+                                dest='vpool',
                                 required=True)
-    mandatory_args.add_argument('-neighborhood', '-nh',
-                                help='Name of Neighborhood',
-                                metavar='<neighborhood>',
-                                dest='neighborhood',
+    mandatory_args.add_argument('-varray', '-va',
+                                help='Name of varray',
+                                metavar='<varray>',
+                                dest='varray',
                                 required=True)
     create_parser.add_argument('-count',
                                 dest='count',
@@ -923,10 +924,10 @@ def create_parser(subcommand_parsers, common_parser):
                                 metavar='<protection>',
                                 dest='protection',
                                 nargs='+')
-    create_parser.add_argument('-pnh', '-protection-neighborhoods', 
-                                help='Protection neighborhoods',
-                                dest='protection_neighborhoods',
-                                metavar='<protection neighborhoods>',
+    create_parser.add_argument('-pnh', '-protection-varrays', 
+                                help='Protection varrays',
+                                dest='protection_varrays',
+                                metavar='<protection varrays>',
                                 nargs='+')
     create_parser.add_argument('-cons', '-consistentvol', 
                                 help='The name of the volume which is required to consistent with created volume',
@@ -951,8 +952,8 @@ def volume_create(args):
         if(not args.tenant):
             args.tenant=""
         res = obj.create(args.tenant + "/" + args.project, args.name, size, 
-                         args.neighborhood, args.cos, None, args.sync,
-                         args.count, None, args.protection, args.protection_neighborhoods,
+                         args.varray, args.vpool, None, args.sync,
+                         args.count, None, args.protection, args.protection_varrays,
                          args.consistent_volume_label)
 #        if(args.sync == False):
 #            return common.format_json_object(res)
@@ -991,10 +992,10 @@ def update_parser(subcommand_parsers, common_parser):
                                 metavar='<label>',
                                 dest='label',
                                 required=True)
-    mandatory_args.add_argument('-cos', '-c',
-                                help='Name of New CoS',
-                                metavar='<cosname>',
-                                dest='cos',
+    mandatory_args.add_argument('-vpool', '-vp',
+                                help='Name of New vpool',
+                                metavar='<vpoolname>',
+                                dest='vpool',
                                 required=True)
     
     update_parser.set_defaults(func=volume_update)
@@ -1007,7 +1008,7 @@ def volume_update(args):
             args.tenant=""
         res = obj.update(args.tenant + "/" + args.project + "/" +args.name,
                                 args.label,
-                                args.cos)
+                                args.vpool)
         #return common.format_json_object(res)
     except SOSError as e:
         if (e.err_code == SOSError.NOT_FOUND_ERR):
@@ -1670,10 +1671,10 @@ def volume_mirror_protect_list(args):
             if(protectobj != None):
                 if("source" in protectobj and "name" in protectobj["source"]):
                     del protectobj["source"]["name"]
-                if(protectobj['neighborhood']):
-                    nh = Neighborhood(args.ip, args.port).neighborhood_show(protectobj['neighborhood']['id'])
+                if(protectobj['varray']):
+                    nh = VirtualArray(args.ip, args.port).varray_show(protectobj['varray']['id'])
                     if(nh != None):
-                        protectobj['neighborhood_name'] = nh['name']
+                        protectobj['varray_name'] = nh['name']
                 if(protectobj['source']):
                     vol = obj.show_by_uri(protectobj['source']['id'])
                     if(vol != None):
@@ -1685,7 +1686,7 @@ def volume_mirror_protect_list(args):
                 mirrorlist.append(protectobj)
         if(len(mirrorlist) > 0):
             from common import TableGenerator
-            TableGenerator(mirrorlist, ['name', 'source_volume', 'neighborhood_name', 'protocols', 'storagesystem_name']).printTable()
+            TableGenerator(mirrorlist, ['name', 'source_volume', 'varray_name', 'protocols', 'storagesystem_name']).printTable()
 
     except SOSError as e:
         raise e
@@ -1867,11 +1868,11 @@ def volume_list(args):
                 for record in output:
                     if("project" in record and "name" in record["project"]):
                         del record["project"]["name"]
-                    if("cos" in record and "cos_params" in record["cos"] 
-                       and record["cos"]["cos_params"]):
-                        for cos_param in record["cos"]["cos_params"]:
-                            record[cos_param["name"]] = cos_param["value"]
-                        record["cos"]=None
+                    if("vpool" in record and "vpool_params" in record["vpool"] 
+                       and record["vpool"]["vpool_params"]):
+                        for vpool_param in record["vpool"]["vpool_params"]:
+                            record[vpool_param["name"]] = vpool_param["value"]
+                        record["vpool"]=None
                 #show a short table
                 from common import TableGenerator
                 if(not args.long):

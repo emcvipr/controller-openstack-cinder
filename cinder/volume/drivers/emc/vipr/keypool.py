@@ -117,14 +117,14 @@ class Keypool(object):
 	except SOSError as e:
 	    raise e
 
-    def keypool_create(self, keypool , projectname, tenant, cosname, apitype, uid, secret):
+    def keypool_create(self, keypool , projectname, tenant, vpoolname, apitype, uid, secret):
         '''
         creates a keypool
         parameters:    
             keypool:  	label of the keypool
             project:  	project name
             tenant:  	tenant  name
-            cos:  	cos  name
+            vpool:  	vpool  name
             apitype:    api type(s3, swift or atmos)
 	    uid:	user id
 	    secret:	secret key
@@ -148,11 +148,11 @@ class Keypool(object):
         	raise SOSError(SOSError.VALUE_ERR, 
                        "Porject " + projectname + ": not found")
 
-	if ( (cosname) and (not common.is_uri(cosname)) ):
-	    from cos import Cos
-            obj = Cos(self.__ipAddr, self.__port)
-            cos = obj.cos_show(cosname , 'object')
-            cos_uri = cos['id']
+	if ( (vpoolname) and (not common.is_uri(vpoolname)) ):
+	    from virtualpool import VirtualPool
+            obj = VirtualPool(self.__ipAddr, self.__port)
+            vpool = obj.vpool_show(vpoolname , 'object')
+            vpool_uri = vpool['id']
 
 	if (not common.is_uri(tenant)):
 	    from tenant import Tenant
@@ -161,11 +161,11 @@ class Keypool(object):
 
 	try:
 	    if(apitype == 's3'):
-		return s3_bucket_create(namespace, keypool, project_uri, cos_uri , uid, secretkey)
+		return s3_bucket_create(namespace, keypool, project_uri, vpool_uri , uid, secretkey)
 	    elif(apitype == 'swift'):
-		return swift_container_create(namespace, keypool, project_uri, cos_uri, uid, secretkey )
+		return swift_container_create(namespace, keypool, project_uri, vpool_uri, uid, secretkey )
 	    elif(apitype == 'atmos'):
-		return atmos_subtenant_create(namespace, tenant, keypool, project_uri, cos_uri, uid, secretkey )
+		return atmos_subtenant_create(namespace, tenant, keypool, project_uri, vpool_uri, uid, secretkey )
 	    else:
         	raise SOSError(SOSError.VALUE_ERR, 
                        "Wrong API type " + apitype + " specified")
@@ -200,7 +200,7 @@ class Keypool(object):
 
     def keypool_list(self, projectname, tenant, apitype, uid, secret):
         '''
-        Returns all the keypools in a zone
+        Returns all the keypools in a vdc
         Parameters:           
             keypool:  label of the keypool
             project:  project name
@@ -234,14 +234,14 @@ class Keypool(object):
 	    raise e
 
 
-    def atmos_subtenant_create(namespace, tenant, keypool, project, cos, uid, secretkey ):
-	if(cos):
-            from cos import Cos
-            obj = Cos(self.__ipAddr, self.__port)
+    def atmos_subtenant_create(namespace, tenant, keypool, project, vpool, uid, secretkey ):
+	if(vpool):
+            from virtualpool import VirtualPool
+            obj = VirtualPool(self.__ipAddr, self.__port)
 	
-	    cos_uri = obj.cos_query(cos , 'object')
+	    vpool_uri = obj.vpool_query(vpool , 'object')
 
-            cos_uri = cos_uri.strip()
+            vpool_uri = vpool_uri.strip()
 
         if ( (project) and (not common.is_uri(project)) ):
             from project import Project
@@ -260,7 +260,7 @@ class Keypool(object):
 	
 	_headers = dict()
 	_headers['x-emc-namespace'] = namespace
-        _headers['x-emc-cos'] = cos_uri
+        _headers['x-emc-vpool'] = vpool_uri
         _headers['x-emc-project-id'] = project_uri
 
 	(s, h) = common.service_json_request(self.__ipAddr, ATMOS_PORT , "PUT",
@@ -282,7 +282,7 @@ class Keypool(object):
 
 
 
-    def swift_container_create(container, namespace, tenant, project, cos, uid, secret):
+    def swift_container_create(container, namespace, tenant, project, vpool, uid, secret):
 
         if ( (project) and (not common.is_uri(project)) ):
             from project import Project
@@ -303,14 +303,14 @@ class Keypool(object):
  	    project_uri = project_uri.strip()
             _headers['x-emc-project-id'] = project_uri
 
-	if(cos):
-            from cos import Cos
-            obj = Cos(self.__ipAddr, self.__port)
+	if(vpool):
+            from virtualpool import VirtualPool
+            obj = VirtualPool(self.__ipAddr, self.__port)
 	
-	    cos_uri = obj.cos_query(cos , 'object')
+	    vpool_uri = obj.vpool_query(vpool , 'object')
 
-            cos_uri = cos_uri.strip()
-            _headers['x-emc-cos'] = cos_uri
+            vpool_uri = vpool_uri.strip()
+            _headers['x-emc-vpool'] = vpool_uri
 
 	token = self.swift_authenticate(uid, secret)
 
@@ -403,7 +403,7 @@ class Keypool(object):
 
 
 
-    def s3_bucket_create(namespace, bucket, projecturi, cosuri, uid, secret):
+    def s3_bucket_create(namespace, bucket, projecturi, vpooluri, uid, secret):
 	_headers = dict()
 	_headers['x-emc-namespace'] = namespace
         if _headers.get("x-amz-date") == None:
@@ -538,10 +538,10 @@ def create_parser(subcommand_parsers, common_parser):
                                 dest='name',
                                 required=True)
 
-    create_parser.add_argument('-cos',
-                                help='Name of cos',
-                                metavar='<cosname>',
-                                dest='cos')
+    create_parser.add_argument('-vpool',
+                                help='Name of vpool',
+                                metavar='<vpoolname>',
+                                dest='vpool')
 
     create_parser.add_argument('-tenant', '-tn',
                                 help='Name of tenant',
@@ -579,7 +579,7 @@ def create_parser(subcommand_parsers, common_parser):
 def keypool_create(args):
     obj = Keypool(args.ip, args.port)
     try:
-        res = obj.keypool_create(args.name, args.project, args.tenant, args.cos, args.apitype, args.uid, args.secret)
+        res = obj.keypool_create(args.name, args.project, args.tenant, args.vpool, args.apitype, args.uid, args.secret)
     except SOSError as e:
         if (e.err_code in [SOSError.NOT_FOUND_ERR, 
                            SOSError.ENTRY_ALREADY_EXISTS_ERR]):

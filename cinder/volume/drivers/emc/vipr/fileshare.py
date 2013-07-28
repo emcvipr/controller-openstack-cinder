@@ -21,7 +21,7 @@ class Fileshare(object):
     The class definition for operations on 'Fileshare'. 
     '''
     #Commonly used URIs for the 'Fileshare' module
-    URI_SEARCH_FILESHARES = '/search?resource_type=fileshare&project={0}'
+    URI_SEARCH_FILESHARES = '/file/filesystems/search?project={0}'
     URI_FILESHARES = '/file/filesystems'
     URI_FILESHARE = URI_FILESHARES + '/{0}'
     URI_FILESHARE_CREATE = URI_FILESHARES + '?project={0}'
@@ -184,16 +184,16 @@ class Fileshare(object):
                 return None
         return o
     
-    # Creates a fileshare given label, project, cos and size
-    def create(self, project, label, size, neighborhood, cos, protocol, sync):
+    # Creates a fileshare given label, project, vpool and size
+    def create(self, project, label, size, varray, vpool, protocol, sync):
         '''
         Makes REST API call to create fileshare under a project
         Parameters:
             project: name of the project under which the fileshare will be created
             label: name of fileshare
             size: size of fileshare
-            neighborhood: name of neighborhood
-            cos: name of cos
+            varray: name of varray
+            vpool: name of vpool
             protocol: NFS, NFSv4, CIFS 
         Returns:
             Created task details in JSON response payload
@@ -223,21 +223,22 @@ class Fileshare(object):
             else:
                 raise e
 
-        from cos import Cos
+        from virtualpool import VirtualPool
         from project import Project
-        from neighborhood import Neighborhood
+        from virtualarray import VirtualArray
 
-        cos_obj = Cos(self.__ipAddr, self.__port)
-        cos_uri = cos_obj.cos_query(cos, "file")
+        vpool_obj = VirtualPool(self.__ipAddr, self.__port)
+        vpool_uri = vpool_obj.vpool_query(vpool, "file")
         
-        neighborhood_obj = Neighborhood(self.__ipAddr, self.__port)
-        neighborhood_uri = neighborhood_obj.neighborhood_query(neighborhood)
+        varray_obj = VirtualArray(self.__ipAddr, self.__port)
+        varray_uri = varray_obj.varray_query(varray)
+        
                     
         parms = {
          'name' : label,
          'size' : size,
-         'neighborhood' : neighborhood_uri,
-         'cos' : { 'id'    : cos_uri}
+         'varray' : varray_uri,
+         'vpool' : { 'id'    : vpool_uri}
          }
       
         if(protocol): 
@@ -247,42 +248,50 @@ class Fileshare(object):
 
         proj = Project(self.__ipAddr, self.__port)
         project_uri = proj.project_query(project)
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+        
+        try:
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
                                              Fileshare.URI_FILESHARE_CREATE.format(project_uri),
                                              body)
-        o = common.json_decode(s)
-     
-        if(sync):
-            #fileshare = self.show(name, True)
-            return self.block_until_complete(o["resource"]["id"], 
+            o = common.json_decode(s)
+            if(sync):
+                #fileshare = self.show(name, True)
+                return self.block_until_complete(o["resource"]["id"], 
                                              o["op_id"])
-        else:
-            return o
+            else:
+                return o
+        except SOSError as e:
+                errorMessage = str(e).replace(vpool_uri, vpool)
+                errorMessage = errorMessage.replace(varray_uri, varray)
+                common.print_err_msg_and_exit("create", "filesystem", errorMessage, e.err_code)
+                
+             
+        
 
 
 
     # Update a fileshare information
-    def update(self, name, label, cos):
+    def update(self, name, label, vpool):
         '''
         Makes REST API call to update a fileshare information
         Parameters:
             name: name of the fileshare to be updated
             label: new name of the fileshare
-            cos: name of cos
+            vpool: name of vpool
         Returns
             Created task details in JSON response payload
         '''
         fileshare_uri = self.fileshare_query(name)
         
-        from cos import Cos
+        from virtualpool import VirtualPool
         
-        cos_obj = Cos(self.__ipAddr, self.__port)
-        cos_uri = cos_obj.cos_query(cos, "file")
+        vpool_obj = VirtualPool(self.__ipAddr, self.__port)
+        vpool_uri = vpool_obj.vpool_query(vpool, "file")
         
         body = json.dumps({'share':
         {
          'label' : label,
-         'cos' : { "id" : cos_uri }
+         'vpool' : { "id" : vpool_uri }
         }
         })
         
@@ -308,48 +317,53 @@ class Fileshare(object):
         Returns:
             Created Operation ID details in JSON response payload
         '''
-
-        fileshare_uri = self.fileshare_query(name)
-        if(protocol == 'CIFS'):
-            
-            request = {
+        try:
+            fileshare_uri = self.fileshare_query(name)
+            if(protocol == 'CIFS'):
+                request = {
                 'name'   : share_name,
                 'description'   : share_description
-            }
+                }
             
-            if(permission_type):
-                request["permission_type"] = permission_type
-            if(permission and permission in ["read", "change", "full"]):
-                request["permission"] = permission
+                if(permission_type):
+                     request["permission_type"] = permission_type
+                if(permission and permission in ["read", "change", "full"]):
+                    request["permission"] = permission
             
-            body = json.dumps(request)
+                body = json.dumps(request)
 
-            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+           
+                (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
                                              Fileshare.URI_FILESHARE_SMB_EXPORTS.format(fileshare_uri),
                                              body)
-        else:
-            request = {
+    
+            else:
+                request = {
                 'type'   : security_type,
                 'permissions'   : permission,
                 'root_user' : root_user,
                 'endpoints' :  endpoints ,
                 'protocol' : protocol,
-            }
-            if(sub_dir):
-                request["sub_directory"] = sub_dir
+                }
+                if(sub_dir):
+                    request["sub_directory"] = sub_dir
             
-            body = json.dumps(request)
-            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                body = json.dumps(request)
+                (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
                                              Fileshare.URI_FILESHARE_EXPORTS.format(fileshare_uri),
                                              body)
-        if(not s):
-            return None
-        o = common.json_decode(s)
-        if(sync):
-            return self.block_until_complete(fileshare_uri, o["op_id"])
-        else:
-            return o
-
+            if(not s):
+                return None
+            o = common.json_decode(s)
+            if(sync):
+                return self.block_until_complete(fileshare_uri, o["op_id"])
+            else:
+                return o
+        except SOSError as e:
+                errorMessage = str(e).replace(fileshare_uri, name)
+                common.print_err_msg_and_exit("export", "filesystem", errorMessage, e.err_code)
+            
+    
     # Unexports a fileshare from a host given a fileshare name, type of security and permission
     def unexport(self, name, security_type, permission, root_user, protocol, share_name, sub_dir, sync):
         '''
@@ -613,14 +627,14 @@ def create_parser(subcommand_parsers, common_parser):
                                 metavar='<tenantname>',
                                 dest='tenant',
                                 help='Name of tenant')
-    mandatory_args.add_argument('-cos', '-c',
-                                metavar='<cosname>', dest='cos',
-                                help='Name of Cos',
+    mandatory_args.add_argument('-vpool', '-vp',
+                                metavar='<vpoolname>', dest='vpool',
+                                help='Name of vpool',
                                 required=True)
-    mandatory_args.add_argument('-neighborhood', '-nh',
-                                help='Name of Neighborhood',
-                                metavar='<neighborhood>',
-                                dest='neighborhood',
+    mandatory_args.add_argument('-varray', '-va',
+                                help='Name of varray',
+                                metavar='<varray>',
+                                dest='varray',
                                 required=True)
     create_parser.add_argument('-synchronous', '-sync',
                                 dest='sync',
@@ -641,8 +655,8 @@ def fileshare_create(args):
         res = obj.create(args.tenant + "/" + args.project,
                                 args.name,
                                 size,
-                                args.neighborhood,
-                                args.cos,
+                                args.varray,
+                                args.vpool,
                                 None,
                                 args.sync)
 #        if(args.sync == False):
@@ -682,10 +696,10 @@ def update_parser(subcommand_parsers, common_parser):
                                 metavar='<label>',
                                 dest='label',
                                 required=True)
-    mandatory_args.add_argument('-cos', '-c',
-                                help='Name of New CoS',
-                                metavar='<cosname>',
-                                dest='cos',
+    mandatory_args.add_argument('-vpool', '-vp',
+                                help='Name of New vpool',
+                                metavar='<vpoolname>',
+                                dest='vpool',
                                 required=True)
     
     update_parser.set_defaults(func=fileshare_update)
@@ -699,7 +713,7 @@ def fileshare_update(args):
         obj = Fileshare(args.ip, args.port)
         res = obj.update(args.tenant + "/" + args.project + "/" + args.name,
                                 args.label,
-                                args.cos)
+                                args.vpool)
     except SOSError as e:
         if (e.err_code == SOSError.NOT_FOUND_ERR):
             raise SOSError(e.err_code, "Update failed: " + e.err_text)
@@ -1027,11 +1041,11 @@ def fileshare_list(args):
                         del record["fs_exports"]
                     if("project" in record and "name" in record["project"]):
                         del record["project"]["name"]
-                    if("cos" in record and "cos_params" in record["cos"] 
-                       and record["cos"]["cos_params"]):
-                        for cos_param in record["cos"]["cos_params"]:
-                            record[cos_param["name"]] = cos_param["value"]
-                        record["cos"]=None
+                    if("vpool" in record and "vpool_params" in record["vpool"] 
+                       and record["vpool"]["vpool_params"]):
+                        for vpool_param in record["vpool"]["vpool_params"]:
+                            record[vpool_param["name"]] = vpool_param["value"]
+                        record["vpool"]=None
                         
                 #show a short table
                 from common import TableGenerator

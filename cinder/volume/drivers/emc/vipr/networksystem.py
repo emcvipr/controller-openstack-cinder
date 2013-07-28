@@ -22,11 +22,13 @@ class Networksystem(object):
 
     #Commonly used URIs for the 'Networksystems' module
     URI_SERVICES_BASE               = ''
-    URI_NETWORKSYSTEMS              = URI_SERVICES_BASE   + '/zone/network-systems'
+    URI_NETWORKSYSTEMS              = URI_SERVICES_BASE   + '/vdc/network-systems'
     URI_NETWORKSYSTEM               = URI_NETWORKSYSTEMS  + '/{0}'
     URI_NETWORKSYSTEM_DISCOVER             = URI_NETWORKSYSTEMS  + '/{0}/discover'
     URI_NETWORKSYSTEM_FCENDPOINTS         = URI_NETWORKSYSTEMS  + '/{0}/fc-endpoints'
-    URI_NETWORKSYSTEM_ZONEREFERENCES = URI_NETWORKSYSTEMS + '/san-references/{0},{1}'
+    URI_NETWORKSYSTEM_VDCREFERENCES = URI_NETWORKSYSTEMS + '/san-references/{0},{1}'
+    URI_RESOURCE_DEACTIVATE      = '{0}/deactivate'
+	
 
 
     
@@ -61,7 +63,7 @@ class Networksystem(object):
 
     def networksystem_list(self):
         '''
-        Returns all the networksystems in a zone
+        Returns all the networksystems in a vdc
         Parameters:           
         Returns:
                 JSON payload of networksystem list
@@ -164,8 +166,8 @@ class Networksystem(object):
         '''
         uri = self.networksystem_query(label)
 
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "DELETE", 
-					     Networksystem.URI_NETWORKSYSTEM.format(uri),
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+					     Networksystem.URI_RESOURCE_DEACTIVATE.format(Networksystem.URI_NETWORKSYSTEM.format(uri)),
                                              None)
         return str(s) + " ++ " + str(h)
     
@@ -200,12 +202,12 @@ class Networksystem(object):
 
 
 
-    def networksystem_zonereferences(self , initiator, target):
+    def networksystem_vdcreferences(self , initiator, target):
 	'''
-        Makes a REST API call to list zone references
+        Makes a REST API call to list vdc references
 	'''
 	(s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
-                                             Networksystem.URI_NETWORKSYSTEM_ZONEREFERENCES.format(initiator, target) , None)
+                                             Networksystem.URI_NETWORKSYSTEM_VDCREFERENCES.format(initiator, target) , None)
          
         o = common.json_decode(s)
 
@@ -410,15 +412,15 @@ def networksystem_discover(args):
             raise e
 
 
-def zonereferences_parser(subcommand_parsers, common_parser):
+def vdcreferences_parser(subcommand_parsers, common_parser):
     # show command parser
-    zonereferences_parser = subcommand_parsers.add_parser('zonereferences',
-                                description='StorageOS Networksystem zone references CLI usage.',
+    vdcreferences_parser = subcommand_parsers.add_parser('vdcreferences',
+                                description='StorageOS Networksystem vdc references CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Discover a Networksystem')
 
-    mandatory_args = zonereferences_parser.add_argument_group('mandatory arguments')
+    mandatory_args = vdcreferences_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-initiator', '-in',
                                 help='name of initiator',
                                 dest='initiator',
@@ -431,21 +433,21 @@ def zonereferences_parser(subcommand_parsers, common_parser):
                                 metavar='target',
                                 required=True)
 
-    '''zonereferences_parser.add_argument('-tenant',
+    '''vdcreferences_parser.add_argument('-tenant',
                                 help='name of Tenant',
                                 dest='tenant',
                                 metavar='tenant')'''
 
-    zonereferences_parser.set_defaults(func=networksystem_zonereferences)
+    vdcreferences_parser.set_defaults(func=networksystem_vdcreferences)
 
 
 
-def networksystem_zonereferences(args):
+def networksystem_vdcreferences(args):
 
     obj = Networksystem(args.ip, args.port)
     try:
-        result = obj.networksystem_zonereferences(args.initiator, args.target)
-	uris = result['fc_zone_reference']
+        result = obj.networksystem_vdcreferences(args.initiator, args.target)
+	uris = result['fc_vdc_reference']
 	
 
         output = []
@@ -476,10 +478,10 @@ def networksystem_zonereferences(args):
 		return references
 	    elif(args.long == True):
 		from common import TableGenerator
-                TableGenerator(output, [ 'id', 'zoneName','group_name','volume_name','inactive']).printTable()
+                TableGenerator(output, [ 'id', 'vdcName','group_name','volume_name','inactive']).printTable()
             else:
 		from common import TableGenerator
-                TableGenerator(output, [ 'zoneName','group_name','volume_name']).printTable()
+                TableGenerator(output, [ 'vdcName','group_name','volume_name']).printTable()
 
     except SOSError as e:
         raise e
@@ -607,7 +609,7 @@ def networksystem_parser(parent_subparser, common_parser):
     discover_parser(subcommand_parsers, common_parser)
 
     # discover command parser
-    zonereferences_parser(subcommand_parsers, common_parser)
+    vdcreferences_parser(subcommand_parsers, common_parser)
 
     # discover command parser
     listconnections_parser(subcommand_parsers, common_parser)

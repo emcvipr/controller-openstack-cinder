@@ -88,7 +88,7 @@ class Tenant(object):
 
         body = json.dumps(parms)
     
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
                                              Tenant.URI_TENANT_ROLES.format(tenant_uri),
                                              body)
 
@@ -112,7 +112,7 @@ class Tenant(object):
 
         body = json.dumps(parms)
     
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
                                              Tenant.URI_TENANT_ROLES.format(tenant_uri),
                                              body)
 
@@ -188,7 +188,7 @@ class Tenant(object):
          '''
     
         (s, h) = common.service_json_request(self.__ipAddr, common.OBJCTRL_PORT, "GET",
-                                             Tenant.URI_NAMESPACE_BASE,
+                                             Tenant.URI_NAMESPACE_COMMON,
                                              None)
 
  	o = common.json_decode(s)
@@ -417,16 +417,30 @@ class Tenant(object):
             if(e.err_code == SOSError.NOT_FOUND_ERR):
                 parms = dict()
 		parms = {
-                'name': name,
-                'user_mappings': [{
-                    'domain': domain,
-                    'attributes':[{
-                        'key':key,
-                        'value':[value]
-                     }],
-                 }]
+                'name': name
         	}
-        
+		keyval = dict()
+
+		if(key):
+		    keyval['key']=key
+		if(value):
+		    vallst = []
+		    vallst.append(value)
+		    keyval['value']=vallst
+
+		usermappinglst = []
+		attrlst = []
+
+		if( (keyval.has_key('key')) or (keyval.has_key('value')) ):
+		    attrlst.append(keyval)
+
+		usermapping = dict()
+		usermapping['attributes']=attrlst
+		usermapping['domain'] = domain
+		usermappinglst.append(usermapping)
+
+		parms['user_mappings']=usermappinglst
+
                 body = json.dumps(parms)
                 uri = self.tenant_getid()
                 
@@ -472,17 +486,31 @@ class Tenant(object):
                            	          tenname + ": already has the key="+key+" and value="+value+" combination" )
 
             parms = dict()
-	    parms = {
-                 'user_mapping_changes': {
-                     'add': [{
-                        'domain': domain,
-                        'attributes':[{
-                            'key':key,
-                            'value':[value]
-                         }],
-                     }]}
-                 }
 
+	    keyval = dict()
+
+	    if(key):
+	        keyval['key']=key
+	    if(value):
+	        vallst = []
+	        vallst.append(value)
+	        keyval['value']=vallst
+
+	    usermappinglst = []
+	    attrlst = []
+
+	    if( (keyval.has_key('key')) or (keyval.has_key('value')) ):
+	        attrlst.append(keyval)
+
+	    usermapping = dict()
+	    usermapping['attributes']=attrlst
+	    usermapping['domain'] = domain
+	    usermappinglst.append(usermapping)
+	    
+	    adddict = dict()
+	    adddict['add'] = usermappinglst
+
+	    parms['user_mapping_changes'] = adddict
 
             body = json.dumps(parms)
 
@@ -606,17 +634,17 @@ def create_parser(subcommand_parsers, common_parser):
     mandatory_args = create_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-name', '-n',
                                 help='Name of Tenant',
-                                metavar='tenantname',
+                                metavar='<tenantname>',
                                 dest='name',
                                 required=True)
 
-    mandatory_args.add_argument('-key',
+    create_parser.add_argument('-key',
                                help='key of AD attribute to map to tenant',
-                               dest='key', metavar='key', required=True)
+                               dest='key', metavar='<key>')
 
-    mandatory_args.add_argument('-value',
+    create_parser.add_argument('-value',
                                help='value of AD attribute to map to tenant',
-                               dest='value', metavar='value', required=True)
+                               dest='value', metavar='<value>')
 
     mandatory_args.add_argument('-domain',
                                help='domain',
@@ -651,20 +679,22 @@ def add_attribute_parser(subcommand_parsers, common_parser):
     mandatory_args = add_attribute_parser.add_argument_group('mandatory arguments')
     add_attribute_parser.add_argument('-name', '-n',
                                 help='Name of Tenant',
-                                metavar='tenantname',
+                                metavar='<tenantname>',
                                 dest='name')
 
-    mandatory_args.add_argument('-key',
+    add_attribute_parser.add_argument('-key',
                                help='key of AD attribute to map to tenant',
-                               dest='key', metavar='key')
+                               dest='key', metavar='<key>')
 
-    mandatory_args.add_argument('-value',
+    add_attribute_parser.add_argument('-value',
                                help='value of AD attribute to map to tenant',
-                               dest='value', metavar='value')
+                               dest='value', metavar='<value>')
 
     mandatory_args.add_argument('-domain',
                                help='domain',
-                               dest='domain', metavar='<domain>')
+                               dest='domain', metavar='<domain>',
+			       required=True)
+
 
     add_attribute_parser.set_defaults(func=tenant_add_attribute)
 
@@ -1104,7 +1134,7 @@ def get_role(args):
 
 def create_namespace_parser(subcommand_parsers, common_parser):
     # role  command parser
-    create_namespace_parser = subcommand_parsers.add_parser('create-namespace',
+    create_namespace_parser = subcommand_parsers.add_parser('create',
                                 description='StorageOS Tenant Create Namespace CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
@@ -1177,7 +1207,7 @@ def tenant_get_namespace(args):
 
 def show_namespace_parser(subcommand_parsers, common_parser):
     # role  command parser
-    show_namespace_parser = subcommand_parsers.add_parser('show-namespace',
+    show_namespace_parser = subcommand_parsers.add_parser('show',
                                 description='StorageOS Show Namespace CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
@@ -1185,7 +1215,7 @@ def show_namespace_parser(subcommand_parsers, common_parser):
  
     mandatory_args = show_namespace_parser.add_argument_group('mandatory arguments')
 
-    mandatory_args.add_argument('-namespace', 
+    mandatory_args.add_argument('-namespace','-ns',
                                 help='name of Namespace',
                                 dest='namespace',
                                 metavar='<namespace>', 
@@ -1207,7 +1237,7 @@ def show_namespace(args):
 
 def delete_namespace_parser(subcommand_parsers, common_parser):
     # role  command parser
-    delete_namespace_parser = subcommand_parsers.add_parser('delete-namespace',
+    delete_namespace_parser = subcommand_parsers.add_parser('delete',
                                 description='StorageOS Show Namespace CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
@@ -1215,7 +1245,7 @@ def delete_namespace_parser(subcommand_parsers, common_parser):
  
     mandatory_args = delete_namespace_parser.add_argument_group('mandatory arguments')
 
-    mandatory_args.add_argument('-namespace', 
+    mandatory_args.add_argument('-namespace', '-ns',
                                 help='name of Namespace',
                                 dest='namespace',
                                 metavar='<namespace>', 
@@ -1237,7 +1267,7 @@ def delete_namespace(args):
 
 def list_namespaces_parser(subcommand_parsers, common_parser):
     # role  command parser
-    list_namespaces_parser = subcommand_parsers.add_parser('list-namespaces',
+    list_namespaces_parser = subcommand_parsers.add_parser('list',
                                 description='StorageOS List Namespaces CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',

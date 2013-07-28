@@ -243,7 +243,7 @@ class Project(object):
                       }
         body = json.dumps(request);
                     
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
                                              Project.URI_PROJECT_ACL.format(project_uri), body)
         
             
@@ -495,7 +495,7 @@ def update_acl_parser(subcommand_parsers, common_parser):
                                 help='operation to be performed',
                                 required=True)
     mandatory_args.add_argument('-pe', '-privilege',
-                                choices=["all", "backup", "use"],
+                                choices=["all", "backup", "own"],
                                 dest='privilege',
                                 help='privilege',
                                 required=True)

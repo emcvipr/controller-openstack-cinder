@@ -21,7 +21,7 @@ from volume import Volume
 from snapshot import Snapshot
 from common import SOSError
 from project import Project
-from neighborhood import Neighborhood
+from virtualarray import VirtualArray
 import uuid
 import json
 
@@ -39,7 +39,7 @@ class ExportGroup(object):
     URI_EXPORT_GROUPS_VOLUME_INSTANCE = URI_EXPORT_GROUP + "/{0}/volumes/{1}"
     URI_EXPORT_GROUPS_STORAGEPORTS = URI_EXPORT_GROUP + "/{0}/storage-ports"  
     URI_EXPORT_GROUP_LIST = '/projects/{0}/resources'
-    URI_EXPORT_GROUP_SEARCH = '/search?resource_type={0}'
+    URI_EXPORT_GROUP_SEARCH = '/block/exports/search'
     URI_EXPORT_GROUP_DEACTIVATE = URI_EXPORT_GROUPS_SHOW +  '/deactivate' 
     
     def __init__(self, ipAddr, port):
@@ -65,7 +65,7 @@ class ExportGroup(object):
         fullproj = tenant+"/"+project
         projuri = projobj.project_query(fullproj)
         
-        uri = self.URI_EXPORT_GROUP_SEARCH.format('block_export')
+        uri = self.URI_EXPORT_GROUP_SEARCH
         
         if ('?' in uri):
             uri += '&project=' + projuri 
@@ -81,8 +81,7 @@ class ExportGroup(object):
         exportgroups=[]
         resources = common.get_node_value(o, "resource")
         for resource in resources:
-            if(resource["resource_type"]=="block_export"):
-                exportgroups.append(resource["id"])
+            exportgroups.append(resource["id"])
        
         return exportgroups
 
@@ -127,7 +126,7 @@ class ExportGroup(object):
                                              self.URI_EXPORT_GROUPS_STORAGEPORTS.format(uri), None)
         return common.json_decode(s)  
     
-    def exportgroup_create(self, name, project, tenant, neighborhood):
+    def exportgroup_create(self, name, project, tenant, varray):
         '''
         This function will take export group name and project name  as input and
         It will create the Export group with given name.
@@ -149,13 +148,13 @@ class ExportGroup(object):
 	        projobj = Project(self.__ipAddr, self.__port)
                 projuri = projobj.project_query(fullproj) 
 				
-		nh_obj = Neighborhood(self.__ipAddr, self.__port)
-		nhuri = nh_obj.neighborhood_query(neighborhood)
+		nh_obj = VirtualArray(self.__ipAddr, self.__port)
+		nhuri = nh_obj.varray_query(varray)
 				
 		parms = {
 			'name' : name,
 			'project' : projuri,
-			'neighborhood' : nhuri,
+			'varray' : nhuri,
 			}
                 body = json.dumps(parms)
                    
@@ -319,17 +318,17 @@ def create_parser(subcommand_parsers, common_parser):
                 metavar='<tenantname>',
                 dest='tenant',
                 help='container tenant name')
-    mandatory_args.add_argument('-neighborhood', '-nh',
-                metavar='<neighborhood>',
-                dest='neighborhood',
-                help='neighborhood for export',
+    mandatory_args.add_argument('-varray', '-va',
+                metavar='<varray>',
+                dest='varray',
+                help='varray for export',
                 required=True)
     create_parser.set_defaults(func=exportgroup_create)
 
 def exportgroup_create(args):
     try:
         obj = ExportGroup(args.ip, args.port)
-        res = obj.exportgroup_create(args.name, args.project, args.tenant, args.neighborhood)
+        res = obj.exportgroup_create(args.name, args.project, args.tenant, args.varray)
     except SOSError as e:
         raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + args.name + ": Create failed:\n" + e.err_text)
         

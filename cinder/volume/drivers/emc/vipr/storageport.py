@@ -15,21 +15,21 @@ import common
 import argparse
 import textwrap
 from common import SOSError
-from transportzone import Transportzone
+from network import Network
 from storagesystem import StorageSystem
 
 class Storageport(object):
     '''
     Class definition for operations on 'Storage port'
     '''
-    URI_STORAGEPORT_LIST = '/zone/storage-systems/{0}/storage-ports'
-    URI_STORAGEPORT_DETAILS = '/zone/storage-systems/{0}/storage-ports/{1}'
-    URI_STORAGEPORT_SHOW = '/zone/storage-ports/{0}'
-    URI_STORAGEPORT_REGISTER = '/zone/storage-systems/{0}/storage-ports/{1}/register'
-    URI_STORAGEPORT_DEREGISTER = '/zone/storage-ports/{0}/deregister'
-    URI_STORAGEPORT_DELETE = '/zone/storage-ports/{0}'
-    URI_STORAGEPORT_UPDATE = '/zone/storage-ports/{0}'
-    URI_STORAGEPORT        = '/zone/storage-ports/{0}'
+    URI_STORAGEPORT_LIST = '/vdc/storage-systems/{0}/storage-ports'
+    URI_STORAGEPORT_DETAILS = '/vdc/storage-systems/{0}/storage-ports/{1}'
+    URI_STORAGEPORT_SHOW = '/vdc/storage-ports/{0}'
+    URI_STORAGEPORT_REGISTER = '/vdc/storage-systems/{0}/storage-ports/{1}/register'
+    URI_STORAGEPORT_DEREGISTER = '/vdc/storage-ports/{0}/deregister'
+    URI_STORAGEPORT_DELETE = '/vdc/storage-ports/{0}'
+    URI_STORAGEPORT_UPDATE = '/vdc/storage-ports/{0}'
+    URI_STORAGEPORT        = '/vdc/storage-ports/{0}'
     URI_RESOURCE_DEACTIVATE = '{0}/deactivate'
     
     TZONE_TYPE = ['IP', 'Ethernet', 'FC']
@@ -53,11 +53,11 @@ class Storageport(object):
             transportType : transport type
             portspeed     : speed of a port
             portgroup     : group of port it belong
-            transportZone : transportZone name 
+            network : network name 
         Returns:
             JSON response payload
         '''   
-    def storageport_add(self, storagedeviceName, serialNumber, storagedeviceType, label, portname, portid, transportType, portspeed, portgroup, transportZoneId):
+    def storageport_add(self, storagedeviceName, serialNumber, storagedeviceType, label, portname, portid, transportType, portspeed, portgroup, networkId):
        
         storagesystemObj = StorageSystem(self.__ipAddr, self.__port) 
         urideviceid = None
@@ -95,7 +95,7 @@ class Storageport(object):
                         'transportType' : transportType,
                         'portSpeed' : portspeed,
                         'portGroup' : portgroup,
-                        'transportZone':transportZoneId
+                        'network':networkId
                     }) 
 
         
@@ -114,9 +114,9 @@ class Storageport(object):
         
         parms = {}
         if (tzuri):
-            parms['transport_zone'] = tzuri
+            parms['network'] = tzuri
         else:
-            parms['auto_transport_zone'] = 'true'
+            parms['auto_network'] = 'true'
         
         body = json.dumps(parms)
         
@@ -186,29 +186,45 @@ class Storageport(object):
        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
                                             Storageport.URI_STORAGEPORT_DEREGISTER.format(spuri), None) 
        
-    def storageport_update(self, serialNumber, storagedeviceName, storagedeviceType, transportType, tzone, neighborhood, portname):
+    def storageport_update(self, serialNumber, storagedeviceName, storagedeviceType, transportType, 
+                                                                                        tzone, 
+                                                                                        varray, 
+                                                                                        portname, 
+                                                                                        groupname):
         #process         
-        tzuri = None
+        tzuri = Network(self.__ipAddr, self.__port).network_query(tzone, varray)
         ssuri = self.storagesystem_query(storagedeviceName, serialNumber, storagedeviceType)
-
-        if(tzone != None and neighborhood != None):
-                tzuri = Transportzone(self.__ipAddr, self.__port).transportzone_query(tzone, neighborhood)
-        
-        if(ssuri != None ):
+      
+        if(ssuri != None and tzuri != None):
             porturis = self.storageport_list_uri(ssuri)
-            if(portname != None ):
+            is_found = False
+            if(portname != None):
                 for porturi in porturis:
                     sport = self.storageport_show_id(ssuri, porturi['id'])
-                    if(sport['port_name'] == portname and sport['transport_type'] == transportType):
-                        return self.storageport_update_uri(sport['id'], tzuri)
+                    if(sport['transport_type'] == transportType and portname == sport['port_name']):
+                        self.storageport_update_uri(sport['id'], tzuri)
+                        is_found = True
+                        break
                 # if port name is not found storage system, then raise not found exception
-                raise SOSError(SOSError.NOT_FOUND_ERR, "Storage port : " + portname + " is not found")
-                        
-            else:
+                if(is_found == False):
+                    raise SOSError(SOSError.NOT_FOUND_ERR, "port name : %s is not found" % (portname))
+                
+            elif(groupname != None):
+                for porturi in porturis:
+                    sport = self.storageport_show_id(ssuri, porturi['id'])
+                    if(sport['transport_type'] == transportType and groupname == sport['port_group']):
+                        self.storageport_update_uri(sport['id'], tzuri)
+                        is_found = True
+                # if group name is not found storage system, then raise not found exception
+                if(is_found == False):
+                    raise SOSError(SOSError.NOT_FOUND_ERR, "port group: %s is not found" % (groupname))
+            
+            elif(portname == None and groupname == None):
                 for porturi in porturis:
                     sport = self.storageport_show_id(ssuri, porturi['id'])
                     if (sport['transport_type'] == transportType):
                             self.storageport_update_uri(sport['id'], tzuri)
+                            
         None
     
     def storageport_register(self, serialNumber, storagedeviceName, storagedeviceType, transportType, portname):
@@ -241,7 +257,7 @@ class Storageport(object):
         urideviceid = None
         storagesystemObj = StorageSystem(self.__ipAddr, self.__port)
         if(serialNumber):
-            urideviceid = storagesystemObj.query_by_serial_number(serialNumber, storagedeviceType)
+            urideviceid = storagesystemObj.query_by_serial_number_and_type(serialNumber, storagedeviceType)
 
         elif(storagedeviceName):
             urideviceidTemp = storagesystemObj.show(name=storagedeviceName, type=storagedeviceType)
@@ -312,8 +328,8 @@ def create_parser(subcommand_parsers, common_parser):
                       label            - label of a storageport.
                       transportType    - transport type.(either "FC" or  "IP" or "Ethernet")
                       portSpeed        - port speed.(default val - portSpeed = 0)  
-                      transportZone    - transportzone name to which the storageport to be added.
-                      neighborhoodName - Neighborhood name.(above provided trasportzone should be part of neighborhood)'''),
+                      network    - network name to which the storageport to be added.
+                      varrayName - varray name.(above provided trasportzone should be part of varray)'''),
                 parents=[common_parser],
                 conflict_handler='resolve',
                 help='Add a Storageport to storagesystem')
@@ -429,13 +445,13 @@ def update_parser(subcommand_parsers, common_parser):
    
     mandatory_args.add_argument('-tzone', '-tz',
                                 help='Transport zone to which this port is physically connected',
-                                metavar='<transportzone>',
+                                metavar='<network>',
                                 dest='tzone',
                                 required=True)
-    mandatory_args.add_argument('-neighborhood', '-nh',
-                                help='Name of Neighborhood',
-                                metavar='<neighborhood>',
-                                dest='neighborhood',
+    mandatory_args.add_argument('-varray', '-va',
+                                help='Name of varray',
+                                metavar='<varray>',
+                                dest='varray',
                                 required=True)
     
     mandatory_args.add_argument('-transporttype', '-tt',
@@ -445,10 +461,17 @@ def update_parser(subcommand_parsers, common_parser):
                                 dest='transporttype',
                                 required=True)
     
-    update_parser.add_argument('-portName', '-pn',
+    argport = update_parser.add_mutually_exclusive_group(required=False)
+    
+    argport.add_argument('-portname', '-pn',
                                 help='portName or label that belong to storagesystem ',
                                 metavar='<storageportname>',
-                                dest='portName') 
+                                dest='portname')
+    
+    argport.add_argument('-group', '-g',
+                                help='Group that should be processed',
+                                metavar='<portgroup>',
+                                dest='group') 
     
     
     update_parser.set_defaults(func=storageport_update)
@@ -459,8 +482,9 @@ def storageport_update(args):
     try:
         obj.command_validation(args.type, args.transporttype);
         obj.storageport_update(args.serialnumber, args.storagesystem, args.type, args.transporttype, args.tzone, 
-                                                                                                     args.neighborhood, 
-                                                                                                     args.portName)
+                                                                                                     args.varray, 
+                                                                                                     args.portname,
+                                                                                                     args.group)
     except SOSError as e:
         raise e
                     
@@ -514,16 +538,16 @@ def storageport_list(args):
             tz_name = []
             for port in uris:
                 is_active_obj = obj.storageport_show_id(ssuri, port['id'])
-                #transportzone name is display in long list
-                if('transport_zone' in is_active_obj):
-                    if('id' in is_active_obj['transport_zone']):
+                #network name is display in long list
+                if('network' in is_active_obj):
+                    if('id' in is_active_obj['network']):
                         #using tranportzone uri, get zone details
-                        tzob = Transportzone(args.ip, args.port).show_by_uri(is_active_obj['transport_zone']['id'], False)
+                        tzob = Network(args.ip, args.port).show_by_uri(is_active_obj['network']['id'], False)
                         if(tzob):
                             #append zone name into 'tz_name' varible( or directory) 
                             tz_name.append(tzob['name'])
                             #then added tranportzone name attribute into port object
-                            is_active_obj['transport_zone_name'] = tz_name
+                            is_active_obj['network_name'] = tz_name
                             output.append(is_active_obj)
                             tz_name = []
                 else:
@@ -534,12 +558,12 @@ def storageport_list(args):
             else:
                 from common import TableGenerator
                 if(args.long == True):
-                    TableGenerator(output, ['port_name', 'transport_type', 'transport_zone_name', 'port_network_id',
+                    TableGenerator(output, ['port_name', 'transport_type', 'network_name', 'port_network_id',
                                                                                                     'port_speed',
                                                                                                     'port_group', 
                                                                                                     'registration_status']).printTable()
                 else:
-                    TableGenerator(output, ['port_name', 'transport_type', 'transport_zone_name','port_network_id', 'registration_status']).printTable()
+                    TableGenerator(output, ['port_name', 'transport_type', 'network_name','port_network_id', 'registration_status']).printTable()
  
     except SOSError as e:
             raise e

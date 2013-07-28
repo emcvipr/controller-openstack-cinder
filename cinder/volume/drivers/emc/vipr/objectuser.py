@@ -99,6 +99,8 @@ class Objectuser(object):
         Makes a REST API call to delete a objectuser by its UUID
         '''
 	uri = self.URI_WEBSTORAGE_USER_DEACTIVATE
+
+	userval = self.objectuser_query(uid)
 	
 	parms = {
                 'user': uid
@@ -134,7 +136,7 @@ def add_parser(subcommand_parsers, common_parser):
                                 dest='uid',
                                 required=True)
 
-    mandatory_args.add_argument('-namespace',
+    mandatory_args.add_argument('-namespace','-ns',
                                 help='namespace',
                                 metavar='<namespace>',
                                 dest='namespace',
@@ -209,8 +211,9 @@ def objectuser_list(args):
 	    tmp['name']=iter
             output.append(tmp)
 	
-	from common import TableGenerator
-        TableGenerator(output, [ 'name']).printTable()
+	if(res):
+	    from common import TableGenerator
+            TableGenerator(output, [ 'name']).printTable()
 
     except SOSError as e:
         if(e.err_code == SOSError.NOT_FOUND_ERR):

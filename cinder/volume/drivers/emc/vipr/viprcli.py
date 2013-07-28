@@ -21,7 +21,7 @@ import sys
 
 import authentication
 import common
-import cos
+import virtualpool
 import tenant
 import project
 import fileshare
@@ -33,11 +33,11 @@ import volume
 import metering
 import monitoring
 import storagesystem
-import neighborhood
+import virtualarray
 import storageport
 import exportgroup
 import networksystem
-import transportzone
+import network
 import sysmanager
 #import objectpool
 import objectuser
@@ -56,21 +56,21 @@ warnings.filterwarnings(
 
 # Fetch StorageOS environment variables defined (if any)
 
-sos_ip = common.getenv('SDS_HOSTNAME')
-sos_port = common.getenv('SDS_PORT')
-sds_cli_dir = common.getenv('SDS_CLI_INSTALL_DIR')
+vipr_ip = common.getenv('VIPR_HOSTNAME')
+vipr_port = common.getenv('VIPR_PORT')
+vipr_cli_dir = common.getenv('VIPR_CLI_INSTALL_DIR')
 # parser having common arguments across all modules
 
 common_parser = argparse.ArgumentParser()
 common_parser.add_argument('-hostname', '-hn',
                metavar='<hostname>',
-               default=sos_ip,
+               default=vipr_ip,
 	       dest='ip',
                help='Hostname (fully qualifiled domain name) of StorageOS')
 common_parser.add_argument('-port', '-po',
                type=int,
                metavar='<port_number>',
-               default=sos_port,
+               default=vipr_port,
 	       dest='port',
                help='port number of StorageOS')
 common_parser.add_argument('-cf','-cookiefile',
@@ -91,7 +91,7 @@ main_parser.add_argument('-v', '--version','-version',
 
 def display_version():
     try:
-        filename = sds_cli_dir + "/bin/ver.txt"
+        filename = vipr_cli_dir + "/bin/ver.txt"
         verfile = open(filename,'r')
         line = verfile.readline()
         print line
@@ -102,10 +102,10 @@ def display_version():
 # register module specific parsers with the common_parser
 module_parsers = main_parser.add_subparsers(help='Use One Of Commands') 
 
-authentication.authenticate_parser(module_parsers, sos_ip, sos_port)
-#authentication.logout_parser(module_parsers, sos_ip, sos_port)
+authentication.authenticate_parser(module_parsers, vipr_ip, vipr_port)
+authentication.logout_parser(module_parsers, vipr_ip, vipr_port)
 authentication.authentication_parser(module_parsers, common_parser)
-cos.cos_parser(module_parsers, common_parser)
+virtualpool.vpool_parser(module_parsers, common_parser)
 tenant.tenant_parser(module_parsers, common_parser)
 tenant.namespace_parser(module_parsers, common_parser)
 project.project_parser(module_parsers, common_parser)
@@ -118,7 +118,7 @@ storagepool.storagepool_parser(module_parsers, common_parser)
 metering.meter_parser(module_parsers, common_parser)
 monitoring.monitor_parser(module_parsers, common_parser)
 storagesystem.storagesystem_parser(module_parsers, common_parser)
-neighborhood.neighborhood_parser(module_parsers, common_parser)
+virtualarray.varray_parser(module_parsers, common_parser)
 storageport.storageport_parser(module_parsers, common_parser)
 exportgroup.exportgroup_parser(module_parsers, common_parser)
 sysmanager.system_parser(module_parsers, common_parser)
@@ -128,7 +128,7 @@ objectuser.objectuser_parser(module_parsers, common_parser)
 objectcos.objectcos_parser(module_parsers, common_parser)
 secretkeyuser.secretkeyuser_parser(module_parsers, common_parser)
 networksystem.networksystem_parser(module_parsers, common_parser)
-transportzone.transportzone_parser(module_parsers, common_parser)
+network.network_parser(module_parsers, common_parser)
 
 
 # Parse Command line Arguments and execute the corresponding routines
