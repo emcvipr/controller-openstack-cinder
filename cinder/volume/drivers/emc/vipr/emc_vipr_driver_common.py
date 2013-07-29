@@ -31,7 +31,7 @@ from authentication import Authentication
 import common as vipr_utils
 from common import SOSError
 from exportgroup import ExportGroup
-from neighborhood import Neighborhood
+from virtualarray import VirtualArray 
 from project import Project
 from snapshot import Snapshot
 from volume import Volume
@@ -120,16 +120,16 @@ class EMCViPRDriverCommon():
         if nhs is not None and len(nhs) > 0:
             nh = nhs[0].toxml().replace('<ViPRNeighborhood>', '')
             nh = nh.replace('</ViPRNeighborhood>', '')
-            self.neighborhood = nh
-            LOG.debug(_("ViPR Neighborhood: %(nh)s") % (locals()))
+            self.virtualarray = nh
+            LOG.debug(_("ViPR VirtualArray: %(nh)s") % (locals()))
         if nh is None:
-            LOG.debug(_("ViPR Neighborhood not found in the config file."))
+            LOG.debug(_("ViPR VirtualArray not found in the config file."))
             return None
 
         viprinfo = {'FQDN': fqdn, 'port': port, 'username': user,
                     'password': password,
                     'tenant': tenant, 'project': project,
-                    'neighborhood': nh}
+                    'virtualarray': nh}
 
         return viprinfo
 
@@ -153,7 +153,7 @@ class EMCViPRDriverCommon():
             res = obj.create(self.tenant + "/" + self.project,
                              name,
                              size,
-                             self.neighborhood,
+                             self.virtualarray,
                              self.vpool,
                              '',
                              sync,
@@ -273,7 +273,7 @@ class EMCViPRDriverCommon():
                 res = obj.exportgroup_add_volumes(foundgroupname, tenantproject, volumename, None)
             else:
                 foundgroupname = hostname + 'SG'
-                res = obj.exportgroup_create(foundgroupname, tenantproject, self.neighborhood, protocol, initiatorNode, initiatorPort, hostname, volumename)
+                res = obj.exportgroup_create(foundgroupname, tenantproject, self.virtualarray, protocol, initiatorNode, initiatorPort, hostname, volumename)
 
             # Wait for LUN to be really attached
             device_info = self.find_device_number(volume)
