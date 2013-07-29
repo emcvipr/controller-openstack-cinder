@@ -116,10 +116,10 @@ class EMCViPRDriverCommon():
             LOG.debug(_("ViPR project not found in the config file."))
             return None
 
-        nhs = dom.getElementsByTagName('ViPRNeighborhood')
+        nhs = dom.getElementsByTagName('ViPRVirtualArray')
         if nhs is not None and len(nhs) > 0:
-            nh = nhs[0].toxml().replace('<ViPRNeighborhood>', '')
-            nh = nh.replace('</ViPRNeighborhood>', '')
+            nh = nhs[0].toxml().replace('<ViPRVirtualArray>', '')
+            nh = nh.replace('</ViPRVirtualArray>', '')
             self.virtualarray = nh
             LOG.debug(_("ViPR VirtualArray: %(nh)s") % (locals()))
         if nh is None:
