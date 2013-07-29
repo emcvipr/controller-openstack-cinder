@@ -256,24 +256,35 @@ class EMCViPRDriverCommon():
 
             foundgroupname = None
             tenantproject = self.tenant+ '/' + self.project
-            grouplist = obj.exportgroup_list(tenantproject)
+            # grouplist = obj.exportgroup_list(tenantproject)
+            grouplist = obj.exportgroup_list(self.project, self.tenant)
+
             for groupid in grouplist:
-                groupdetails = obj.exportgroup_show_uri(groupid)
+                #groupdetails = obj.exportgroup_show_uri(groupid)
+                groupdetails = obj.exportgroup_show(groupid, self.project, self.tenant)
                 initiators = groupdetails['initiators']
                 for initiator in initiators:
-                    if (initiator['initiator_node'] == initiatorNode and
-                        initiator['initiator_port'] == initiatorPort):
-                        foundgroupname = groupdetails['name']
+                    try:
+                        # if (initiator['initiator_node'] == initiatorNode and
+                        if (initiator['initiator_node'] == initiatorNode):
+                            foundgroupname = groupdetails['name']
+                            break
+                    except KeyError as e:
+                        foundgroupname = None 
+
+                    if foundgroupname is not None:
                         break
 
-                if foundgroupname is not None:
-                    break
-
             if foundgroupname is not None:
-                res = obj.exportgroup_add_volumes(foundgroupname, tenantproject, volumename, None)
+                # res = obj.exportgroup_add_volumes(foundgroupname, tenantproject, volumename, None)
+                res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
             else:
                 foundgroupname = hostname + 'SG'
-                res = obj.exportgroup_create(foundgroupname, tenantproject, self.virtualarray, protocol, initiatorNode, initiatorPort, hostname, volumename)
+                # res = obj.exportgroup_create(foundgroupname, tenantproject, self.virtualarray, protocol, initiatorNode, initiatorPort, hostname, volumename)
+                res = obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray)
+                res = obj.exportgroup_add_initiator(foundgroupname, self.project, self.tenant, protocol, initiatorNode, initiatorPort, hostname)
+                res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
+
 
             # Wait for LUN to be really attached
             device_info = self.find_device_number(volume)
@@ -309,7 +320,8 @@ class EMCViPRDriverCommon():
             tenantproject = self.tenant+ '/' + self.project
             grouplist = obj.exportgroup_list(tenantproject)
             for groupid in grouplist:
-                groupdetails = obj.exportgroup_show_uri(groupid)
+                #groupdetails = obj.exportgroup_show_uri(groupid)
+                groupdetails = obj.exportgroup_show(groupid, self.project, self.tenant)
                 initiators = groupdetails['initiators']
                 for initiator in initiators:
                     if (initiator['initiator_node'] == initiatorNode and
@@ -338,7 +350,8 @@ class EMCViPRDriverCommon():
             vol_obj = Volume(self.fqdn, self.port)
 
             found_device_number = None
-            fullname = self.tenant + '/' + self.project + '/' + volumename
+            # fullname = self.tenant + '/' + self.project + '/' + volumename
+            fullname = self.project + '/' + volumename
             # 0 is a valid number for found_device_number.
             # Only loop if it is None
             while found_device_number is None:
@@ -361,7 +374,12 @@ class EMCViPRDriverCommon():
                 """
 
                 uri = vol_details['id']
-                o = vol_obj.show_volume_exports_by_uri(uri)
+                (s, h) = vipr_utils.service_json_request(self.fqdn, self.port, 
+                                      "GET",
+                                      Volume.URI_VOLUME_EXPORTS.format(uri),
+                                      None)
+                o =  vipr_utils.json_decode(s)
+                # o = vol_obj.show_volume_exports_by_uri(uri)
                 LOG.debug(_("Volume exports: %s") % o)
                 """
                 o['itl'][0]
