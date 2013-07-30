@@ -266,7 +266,7 @@ class EMCViPRDriverCommon():
                 for initiator in initiators:
                     try:
                         # if (initiator['initiator_node'] == initiatorNode and
-                        if (initiator['initiator_node'] == initiatorNode):
+                        if (initiator['initiator_port'] == initiatorPort):
                             foundgroupname = groupdetails['name']
                             break
                     except KeyError as e:
@@ -318,7 +318,7 @@ class EMCViPRDriverCommon():
 
             foundgroupname = None
             tenantproject = self.tenant+ '/' + self.project
-            grouplist = obj.exportgroup_list(tenantproject)
+            grouplist = obj.exportgroup_list(self.project, self.tenant)
             for groupid in grouplist:
                 #groupdetails = obj.exportgroup_show_uri(groupid)
                 groupdetails = obj.exportgroup_show(groupid, self.project, self.tenant)
@@ -338,7 +338,7 @@ class EMCViPRDriverCommon():
                     break
 
             if foundgroupname is not None:
-                res = obj.exportgroup_remove_volumes(foundgroupname, tenantproject, volumename)
+                res = obj.exportgroup_remove_volumes(foundgroupname, project, tenant, volumename, False)    # no snapshot (snapshot = False)
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + foundgroupname + ": Create failed: " + e.err_text)
 

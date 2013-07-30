@@ -319,6 +319,7 @@ class Tenant(object):
         if (common.is_uri(label)):
             return label
 
+        # import pdb; pdb.set_trace()
         id = self.tenant_getid()
 
 	if not label:

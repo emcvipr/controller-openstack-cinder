@@ -72,6 +72,7 @@ class ExportGroup(object):
         else:
             uri += '?project=' + projuri
 
+        # import pdb; pdb.set_trace()
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
                                              uri, None)
         o = common.json_decode(s)
