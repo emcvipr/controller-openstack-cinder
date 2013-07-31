@@ -338,7 +338,7 @@ class EMCViPRDriverCommon():
                     break
 
             if foundgroupname is not None:
-                res = obj.exportgroup_remove_volumes(foundgroupname, project, tenant, volumename, False)    # no snapshot (snapshot = False)
+                res = obj.exportgroup_remove_volumes(foundgroupname, self.project, self.tenant, volumename, False)    # no snapshot (snapshot = False)
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + foundgroupname + ": Create failed: " + e.err_text)
 
