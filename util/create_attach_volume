@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# script that:
+#   - creates one instance
+#   - creates one volume  (of a predefined OpenStack volume type)
+#   - attaches the volume to the instance
+
+DATE=`date "+%m%d%Y%H%M"`
+MNT="/dev/vdc"
+VOLUMETYPE="Vipr vpool"
+VOLNAME="openstack-iscsi-${DATE}"
+INSTNAME="instance-${DATE}"
+
+#get the nova image id
+IMAGE=$( nova image-list | grep "cirros-0.3.1-x86_64-uec " | cut -f2 -d' ')
+
+echo "Creating an instance: ${INSTNAME}"
+nova boot --flavor m1.tiny --image ${IMAGE} ${INSTNAME}
+nova list
+
+echo "Waiting for instance to be created"
+STATUS="unknown"
+while [ "${STATUS}" != "ACTIVE" ]; do
+   sleep 5
+   STATUS=$( nova list | grep "${INSTNAME}" | cut -f6 -d' ')
+done
+
+echo "*** instance is now available"
+
+
+cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMETYPE}" 1
+cinder list
+
+echo "Waiting for volume to be created"
+STATUS="unknown"
+while [ "${STATUS}" != "available" ]; do
+   sleep 5
+   STATUS=$( cinder list | grep "${VOLNAME}" | cut -f4 -d' ')
+done
+
+echo "*** volume is now available"
+
+#get the instance id
+INSTANCE=$( nova list | grep "${INSTNAME}" | cut -f2 -d' ')
+#get the volume id
+VOLUME=$( cinder list | grep "${VOLNAME}" | cut -f2 -d' ')
+
+# ok, now attach the volume
+nova volume-attach ${INSTANCE} ${VOLUME} ${MNT}
+
