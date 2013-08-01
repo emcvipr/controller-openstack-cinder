@@ -139,14 +139,21 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             'data': iscsi_properties
         }
 
-    def _do_iscsi_discovery(self, volume):
+    def _do_iscsi_discovery(self, volume, ip_address=None):
 
         LOG.warn(_("ISCSI provider_location not stored, using discovery"))
 
-        (out, _err) = self._execute('iscsiadm', '-m', 'discovery',
+        if ip_address is None:
+            (out, _err) = self._execute('iscsiadm', '-m', 'discovery',
                                     '-t', 'sendtargets', '-p',
                                     self.configuration.iscsi_ip_address,
                                     run_as_root=True)
+        else:
+            (out, _err) = self._execute('iscsiadm', '-m', 'discovery',
+                                    '-t', 'sendtargets', '-p',
+                                    ip_address,
+                                    run_as_root=True)
+
         targets = []
         for target in out.splitlines():
             targets.append(target)
@@ -179,7 +186,15 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
         properties = {}
 
-        location = self._do_iscsi_discovery(volume)
+        device_info = self.common.find_device_number(volume)
+        if device_info is None:
+            exception_message = (_("Cannot find device number for volume %s")
+                                 % volume['name'])
+            raise exception.VolumeBackendAPIException(data=exception_message)
+
+        ip_address = device_info['ip_address']
+
+        location = self._do_iscsi_discovery(volume, ip_address)
         if not location:
             raise exception.InvalidVolume(_("Could not find iSCSI export "
                                           " for volume %s") %
@@ -188,10 +203,19 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         LOG.debug(_("ISCSI Discovery: Found %s") % (location))
         properties['target_discovered'] = True
 
+        '''
         device_info = self.common.find_device_number(volume)
         if device_info is None or device_info['hostlunid'] is None:
             exception_message = (_("Cannot find device number for volume %s")
                                  % volume['name'])
+            raise exception.VolumeBackendAPIException(data=exception_message)
+        '''
+
+        try:
+            if device_info['hostlunid'] is None:
+                exception_message = (_("Cannot find device number for volume %s")
+                                 % volume['name'])
+        except KeyError as e:
             raise exception.VolumeBackendAPIException(data=exception_message)
 
         device_number = device_info['hostlunid']

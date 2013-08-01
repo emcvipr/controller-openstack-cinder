@@ -17,6 +17,8 @@
 #    under the License.
 
 import os
+import random
+import string
 from oslo.config import cfg
 from threading import Timer
 import time 
@@ -280,6 +282,8 @@ class EMCViPRDriverCommon():
                 res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
             else:
                 foundgroupname = hostname + 'SG'
+                # create a unique name
+                foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
                 # res = obj.exportgroup_create(foundgroupname, tenantproject, self.virtualarray, protocol, initiatorNode, initiatorPort, hostname, volumename)
                 res = obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray)
                 res = obj.exportgroup_add_initiator(foundgroupname, self.project, self.tenant, protocol, initiatorNode, initiatorPort, hostname)
@@ -338,7 +342,7 @@ class EMCViPRDriverCommon():
                     break
 
             if foundgroupname is not None:
-                res = obj.exportgroup_remove_volumes(foundgroupname, self.project, self.tenant, volumename, False)    # no snapshot (snapshot = False)
+                res = obj.exportgroup_remove_volumes(foundgroupname, project, tenant, volumename, False)    # no snapshot (snapshot = False)
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + foundgroupname + ": Create failed: " + e.err_text)
 
@@ -400,9 +404,11 @@ class EMCViPRDriverCommon():
                         % (locals()))
 
                 endpoint = o['itl'][0]['target']['port']
+                ip_address = o['itl'][0]['target']['ip_address']
 
                 device_info['hostlunid'] = str(found_device_number)
                 device_info['endpoint'] = endpoint 
+                device_info['ip_address'] = ip_address 
 
         except:
             pass
