@@ -7,7 +7,7 @@
 
 DATE=`date "+%m%d%Y%H%M"`
 MNT="/dev/vdc"
-VOLUMETYPE="Vipr vpool"
+VOLUMETYPE="ViPR vpool"
 VOLNAME="openstack-iscsi-${DATE}"
 INSTNAME="instance-${DATE}"
 
