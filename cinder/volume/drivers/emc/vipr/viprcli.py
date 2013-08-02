@@ -44,6 +44,7 @@ import objectuser
 import objectcos
 import secretkeyuser
 import protectionsystem
+import consistencygroup
 
 import warnings
 
@@ -114,6 +115,7 @@ keypool.keypool_parser(module_parsers, common_parser)
 key.key_parser(module_parsers, common_parser)
 snapshot.snapshot_parser(module_parsers, common_parser)
 volume.volume_parser(module_parsers, common_parser)
+consistencygroup.consistencygroup_parser(module_parsers, common_parser)
 storagepool.storagepool_parser(module_parsers, common_parser)
 metering.meter_parser(module_parsers, common_parser)
 monitoring.monitor_parser(module_parsers, common_parser)

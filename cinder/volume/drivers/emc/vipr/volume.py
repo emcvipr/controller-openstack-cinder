@@ -463,7 +463,7 @@ class Volume(object):
     # Creates a volume given label, project, vpool and size
     def create(self, project, label, size, varray, vpool, 
                protocol, sync, number_of_volumes, thin_provisioned, protection, 
-               protection_varrays, consistent_volume_label):
+               protection_varrays, consistent_volume_label, consistencygroup):
         '''
         Makes REST API call to create volume under a project
         Parameters:
@@ -545,7 +545,7 @@ class Volume(object):
              'size' : size,
              'varray' : varray_uri,
              'project' : project_uri,
-             'vpool' : {'id' : vpool_uri}
+             'vpool' : vpool_uri
             }
         if(protocol):
             request["protocols"] = protocol
@@ -558,7 +558,12 @@ class Volume(object):
         if (consistent_volume_label):
             consistent_volume_uri = self.volume_query(project + '/' + consistent_volume_label)
             request['snapshot_consistent_with'] =  consistent_volume_uri 
-        
+        if(consistencygroup):
+            from consistencygroup import ConsistencyGroup
+            cgobj = ConsistencyGroup(self.__ipAddr, self.__port)
+            (tenant, project) = common.get_parent_child_from_xpath(project)
+            consuri = cgobj.consistencygroup_query(consistencygroup, project, tenant )
+            request['consistency_group'] = consuri
        
         if(protection):
             request["protection_attributes"] =  common.to_stringmap_list(protection)  
@@ -929,6 +934,10 @@ def create_parser(subcommand_parsers, common_parser):
                                 dest='protection_varrays',
                                 metavar='<protection varrays>',
                                 nargs='+')
+    create_parser.add_argument('-cg', '-consistencygroup',
+                                help='The name of the consistency group',
+                                dest='consistencygroup',
+                                metavar='<consistentgroupname>')
     create_parser.add_argument('-cons', '-consistentvol', 
                                 help='The name of the volume which is required to consistent with created volume',
                                 dest='consistent_volume_label',
@@ -954,7 +963,7 @@ def volume_create(args):
         res = obj.create(args.tenant + "/" + args.project, args.name, size, 
                          args.varray, args.vpool, None, args.sync,
                          args.count, None, args.protection, args.protection_varrays,
-                         args.consistent_volume_label)
+                         args.consistent_volume_label, args.consistencygroup)
 #        if(args.sync == False):
 #            return common.format_json_object(res)
     except SOSError as e:

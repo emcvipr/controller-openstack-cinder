@@ -253,6 +253,24 @@ class StorageSystem(object):
         raise SOSError(SOSError.NOT_FOUND_ERR,
                        'Storage system not found with serial number: ' + serial_number + ' and type : '+system_type)
     
+    def query_by_name_and_type(self, name, system_type):
+        
+        systems = self.list_systems()
+        for system in systems:
+            storage_system = self.show_by_uri(system['id'])
+            if ("name" in storage_system and "system_type" in storage_system
+                and system_type == storage_system["system_type"] and
+                name == storage_system['name']):
+                return system['id']
+            
+            if ("name" not in storage_system and "native_guid" in storage_system and "system_type" in storage_system
+                and system_type == storage_system["system_type"] and
+                name == storage_system['native_guid']):
+                return system['id']
+           
+        raise SOSError(SOSError.NOT_FOUND_ERR,
+                       'Storage system not found with name: ' + name + ' and type : '+system_type)
+    
     def query_by_serial_number(self, serial_number):
         serial_num_length = len(serial_number)
         
@@ -925,10 +943,10 @@ def update_parser(subcommand_parsers, common_parser):
                                 conflict_handler='resolve',
                                 help='Updates a storage system')
     mandatory_args = update_parser.add_argument_group('mandatory arguments')
-    mandatory_args.add_argument('-sn', '-serialnumber',
-                                metavar='<serialnumber>',
-                                dest='serialnumber',
-                                help='Serial number of existing storage system to be updated',
+    mandatory_args.add_argument('-n', '-name',
+                                metavar='<name>',
+                                dest='name',
+                                help='Name of existing storage system to be updated',
                                 required=True)
     mandatory_args.add_argument('-t', '-type',
                                choices=StorageSystem.SYSTEM_TYPE_LIST,
@@ -1001,13 +1019,13 @@ def update_storagesystem(args):
         devicePassword = obj.get_password("storage system")
     
     # Capture the input details of array to be updated.        
-    serialNumber = args.serialnumber
+    arrayName = args.name
     arrayType = args.type
         
     
     
-    #Get the storage systems matching the type and the serial number
-    deviceId = obj.query_by_serial_number_and_type(serialNumber, arrayType)
+    #Get the storage systems matching the type and the name
+    deviceId = obj.query_by_name_and_type(arrayName, arrayType)
     
     if(deviceId):
         # Found the device. 

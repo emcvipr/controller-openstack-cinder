@@ -199,12 +199,8 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
             
 	    if(filename):
                 try:
-                    with open(filename, 'wb') as fp:
-                        while(True):
-                            chunk = response.raw.read(100)
-                            if not chunk:
-                                break
-                            fp.write(chunk)
+                    with open(filename, 'w') as fp:
+                       fp.write(response.text)
                 except IOError as e:
                     raise SOSError(e.errno, e.strerror)
 

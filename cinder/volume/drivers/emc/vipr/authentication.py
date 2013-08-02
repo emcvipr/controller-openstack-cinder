@@ -394,7 +394,7 @@ class Authentication(object):
 
         body = json.dumps(parms)
 
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
                                              Authentication.URI_VDC_ROLES,
                                              body)
 
@@ -432,7 +432,7 @@ class Authentication(object):
 
         body = json.dumps(parms)
 
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
                                              Authentication.URI_VDC_ROLES,
                                              body)
 
@@ -457,7 +457,7 @@ def add_authentication_provider(args):
             url = config.get(sectioniter, "url")
             certificate = config.get(sectioniter, 'certificate')
             managerdn = config.get(sectioniter, 'managerdn')
-            passwd_user = config.get(sectioniter, 'passwd_user')
+            #passwd_user = config.get(sectioniter, 'passwd_user')
             searchbase = config.get(sectioniter, 'searchbase')
             searchfilter = config.get(sectioniter, 'searchfilter')
             searchkey = config.get(sectioniter, 'searchkey')
@@ -465,6 +465,11 @@ def add_authentication_provider(args):
             name = config.get(sectioniter, 'name')
             domains = config.get(sectioniter, 'domains')
             whitelist = config.get(sectioniter, 'whitelist')
+
+	    if sys.stdin.isatty():
+                passwd_user = getpass.getpass(prompt="Password for "+name+": ")
+            else:
+                passwd_user = sys.stdin.readline().rstrip()
 
             res = obj.add_authentication_provider(mode, url, certificate, managerdn, passwd_user, 
 					     searchbase, searchfilter, searchkey,

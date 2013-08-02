@@ -289,7 +289,7 @@ class VirtualPool(object):
     def vpool_create(self, name, description,  type, protocols, 
                    multipaths, varrays, provisiontype, protection,
                    systemtype, raidlevel, fastpolicy, drivetype, expandable, usematchedpools,
-                   max_snapshots, max_mirrors):
+                   max_snapshots, max_mirrors, multivolconsistency):
         '''
         This is the function will create the VPOOL with given name and type.
         It will send REST API request to StorageOS instance.
@@ -315,6 +315,8 @@ class VirtualPool(object):
                     parms['protocols'] = protocols
                 if (multipaths):
                     parms['num_paths'] = multipaths
+                if (multivolconsistency):
+                    parms['multi_volume_consistency'] = multivolconsistency
                 if(type == 'block' and provisiontype == None):
                     raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL create error: argument -provisiontype/-pt is required")
                 if(provisiontype):
@@ -603,7 +605,11 @@ def create_parser(subcommand_parsers, common_parser):
                 metavar='<useMatchedPools>',
                 dest='usematchedpools',
                 choices=['true', 'false', 'True', 'False', 'TRUE', 'FALSE'] )
-        
+    create_parser.add_argument('-multivolconsistency','-mvc',
+                help=' multi volume consistency',
+                action='store_true',
+                dest='multivolconsistency')
+    
     create_parser.add_argument('-expandable','-ex',
                                help='Indicates if non disruptive volume expansion should be supported',
                                dest='expandable',
@@ -629,7 +635,8 @@ def vpool_create(args):
                              args.expandable,
                              args.usematchedpools,
                              args.max_snapshots,
-                             args.max_mirrors )
+                             args.max_mirrors,
+                             args.multivolconsistency)
     except SOSError as e:
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL " + args.name + 

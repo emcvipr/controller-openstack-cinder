@@ -157,13 +157,14 @@ class EMCViPRDriverCommon():
                              size,
                              self.virtualarray,
                              self.vpool,
-                             '',
+                             None,
                              sync,
                              count,
-                             False,
-                             False,
-                             '',
-                             ''
+                             None,
+                             None,
+                             None,
+                             None,
+                             None
                              )
             if(sync == False):
                 return vipr_utils.format_json_object(res)

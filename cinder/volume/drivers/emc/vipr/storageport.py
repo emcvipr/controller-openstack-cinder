@@ -443,8 +443,8 @@ def update_parser(subcommand_parsers, common_parser):
                                help='Type of storage system',
                                required=True)
    
-    mandatory_args.add_argument('-tzone', '-tz',
-                                help='Transport zone to which this port is physically connected',
+    mandatory_args.add_argument('-network', '-nw',
+                                help='Network to which this port is physically connected',
                                 metavar='<network>',
                                 dest='tzone',
                                 required=True)

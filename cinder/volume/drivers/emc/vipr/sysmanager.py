@@ -153,8 +153,7 @@ class Upgrade(object):
             return None
         o = common.json_decode(s)
         return o
-
-
+  
 
 class Logging(object):
     '''
@@ -189,7 +188,7 @@ class Logging(object):
 		print print_str
 
             return
-
+      
     	if accept == 'json':
     	    print_str = "{\n" + "\tnode:\t\t" + unit.get('node') + "\n" \
             	        + "\tseverity:\t" + unit.get('severity') + "\n" \
@@ -201,13 +200,13 @@ class Logging(object):
                         + "\tclass:\t\t" + unit.get('class') + "\n" \
                         + "}" + "\n"
 	    if(filehandle):
-		try:
-		    filehandle.write(print_str)
-	    	except IOError:
+	        try:
+	            filehandle.write(print_str)
+	            print print_str
+                except IOError:
     	            pass
-	    #else:
-		#print print_str
-    	else:
+	    
+    	elif accept == 'xml':
             print_str = "<log>" + "\n" \
             + "\t<node>\t\t" + (unit.get('node') if unit.get('node') is not None else "") + "</node>" + "\n" \
             + "\t<severity>\t" + (unit.get('severity') if unit.get('severity') is not None else "") + "</severity>" + "\n" \
@@ -220,16 +219,50 @@ class Logging(object):
             + "</log>" + "\n" 
 	
 	    if(filehandle):
-		try:
-		    filehandle.write(print_str)
+                try:
+	            filehandle.write(print_str)
+                    print print_str
 	    	except IOError:
     	            pass
-		
-	    #else:
-		#print print_str
 
+	   #padded with fillers	
+        elif accept == 'padded':
+            #general logs
+            if unit.get('class'):    
+                utcTime=datetime.datetime.utcfromtimestamp(unit.get('time_ms')/1000.0).strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
+                print_str = utcTime + ' ' + unit.get('node') + ' ' + unit.get('service') + ' [' + unit.get('thread') + '] ' + \
+                unit.get('severity') + ' ' + unit.get('class') + ' (line ' + unit.get('line') + ') ' + unit.get('message') 
+            # system logs
+            else:
+                print_str = unit.get('time') + ',000 ' + unit.get('node') + ' ' + unit.get('service') + ' [-] ' + unit.get('severity') + \
+                ' - ' + '(line -) ' + unit.get('message')
+            
+	    if(filehandle):
+                try:
+	            filehandle.write(print_str)
+                    print print_str
+	        except IOError:
+    	            pass
+       #native text
+        else: 
+            #general logs
+            if unit.get('class'):    
+                utcTime=datetime.datetime.utcfromtimestamp(unit.get('time_ms')/1000.0).strftime('%Y-%m-%d %H:%M:%S,%f')[:-3]
+                print_str = utcTime + ' ' + unit.get('node') + ' ' + unit.get('service') + ' [' + unit.get('thread') + '] ' + \
+                unit.get('severity') + ' ' + unit.get('class') + ' (line ' + unit.get('line') + ') ' + unit.get('message') 
+            # system logs
+            else:
+                print_str = unit.get('time') + ',000 ' + unit.get('node') + ' ' + unit.get('service') + ' ' + unit.get('severity') + \
+                ' ' + unit.get('message')
+            
+	    if(filehandle):
+                try:
+	            filehandle.write(print_str)
+                    print print_str
+	        except IOError:
+                    pass
 
-    def get_logs(self, log, severity, start, end, node, regex, xml, filepath):
+    def get_logs(self, log, severity, start, end, node, regex, format, maxcount, filepath):
 
         params = ''
         if ( log != '' ):
@@ -250,9 +283,12 @@ class Logging(object):
         if ( regex != '' ):
             params += '&' if ('?' in params) else '?'
             params += "msg_regex=" + urllib.quote_plus(regex.encode("utf8"))
+        if (maxcount != ''):
+            params += '&' if ('?' in params) else '?'
+            params += "maxcount=" + maxcount
 
 	tmppath = filepath+".tmp"
-
+        
         (res, h) = common.service_json_request(self.__ipAddr, self.__port,
                                               "GET", self.URI_LOGS + params,
                                               None, None , False , None, tmppath)
@@ -265,7 +301,6 @@ class Logging(object):
                        "Failed to recognize JSON payload")
         except Exception as e:
             raise SOSError(e.errno, e.strerror)
-
 	
 	fp = None
 	if(filepath):
@@ -280,13 +315,10 @@ class Logging(object):
             elif type(resp) is list:
                 layer1_size = len(resp)
                 i = 0
-                while (i < layer1_size):
-		    if(xml == True):
-                        self.direct_print_log_unit(resp[i], 'xml' , fp)
-		    else:
-                        self.direct_print_log_unit(resp[i], 'json' , fp)
+                while i < layer1_size:
+	            self.direct_print_log_unit(resp[i], format, fp)  
                     i += 1
-
+                    
 	    try:
 		os.remove(tmppath)	
 	    except IOError:
@@ -294,6 +326,9 @@ class Logging(object):
 
         else:
             print "No log available."
+
+        if(fp):
+            fp.close()            
 
         if(not resp):
             return None
@@ -350,8 +385,6 @@ class Logging(object):
         return o
 
 
-
-
 def get_logs_parser(subcommand_parsers, common_parser):
     get_logs_parser = subcommand_parsers.add_parser('get-logs',
                                 description='StorageOS: CLI usage to get the logs',
@@ -364,61 +397,26 @@ def get_logs_parser(subcommand_parsers, common_parser):
                                 help='Log Name',
 				default='')
 
-    get_logs_parser.add_argument('-severity', '-sv',
-                                 metavar='<severity>',
-                                 dest='severity',
-                                 help='Any value from 0 to 9(FATAL, EMERG, ALERT, CRIT, ERROR, WARN, NOTICE, INFO, DEBUG, TRACE).',
-				 choices=['0','1','2','3','4', '5','6', '7','8','9'],
-                                 default='7')
-
-    get_logs_parser.add_argument('-start',
-                                metavar='<start>',
-                                dest='start',
-                                help='start date in yyyy-mm-dd_hh:mm:ss format',
-                                default='')
-
-    get_logs_parser.add_argument('-end',
-                                metavar='end',
-                                dest='end',
-                                help='end date in yyyy-mm-dd_hh:mm:ss format',
-                                default='')
-
-    get_logs_parser.add_argument('-node',
-                                metavar='<node_id>',
-                                dest='node',
-                                help='Node',
-                                default='')
-
-
-    get_logs_parser.add_argument('-regular', '-regex',
-                                metavar='<msg_regex>',
-                                dest='regex',
-                                help='Message Regex',
-                                default='')
-
-    get_logs_parser.add_argument('-xml',
-                            dest='xml',
-                            action='store_true',
-                            help='XML response')
-
-
-    mandatory_args = get_logs_parser.add_argument_group('mandatory arguments')
-
-
-    mandatory_args.add_argument('-filepath', '-fp',
-                                help='file path',
-                                metavar='<filepath>',
-                                dest='filepath',
-				required=True)
-
+    add_log_args(get_logs_parser)
+    
     get_logs_parser.set_defaults(func=get_logs)
+    
+def get_alerts_parser(subcommand_parsers, common_parser):
+    get_alerts_parser = subcommand_parsers.add_parser('get-alerts',
+                                description='StorageOS: CLI usage to get the alerts',
+                                conflict_handler='resolve',
+                                help='Get alerts')
+
+    add_log_args(get_alerts_parser)
+    
+    get_alerts_parser.set_defaults(func=get_alerts)
 
 
 def get_logs(args):
     obj = Logging(args.ip, Logging.DEFAULT_PORT)
     from common import TableGenerator
     try:
-        res = obj.get_logs(args.log, args.severity,args.start, args.end, args.node, args.regex, args.xml,args.filepath)
+        res = obj.get_logs(args.log, args.severity,args.start, args.end, args.node, args.regex, args.format, args.maxcount, args.filepath)
     except SOSError as e:
 	common.print_err_msg_and_exit("get", "logs", e.err_text, e.err_code)
 
@@ -492,9 +490,18 @@ def set_log_level(args):
     try:
         res = obj.set_log_level(args.severity, args.logs, args.nodes)
     except SOSError as e:
-	common.print_err_msg_and_exit("set", "log level", e.err_text, e.err_code)
-
-
+	    common.print_err_msg_and_exit("set", "log level", e.err_text, e.err_code)
+    
+def get_alerts(args):
+    obj = Logging(args.ip, Logging.DEFAULT_SYSMGR_PORT)
+    log = "alerts"
+    from common import TableGenerator
+    try:
+        res = obj.get_logs(log, args.severity,args.start, args.end, args.node, args.regex, args.format, args.maxcount, args.filepath)
+    except SOSError as e:
+        common.print_err_msg_and_exit("get", "alerts", e.err_text, e.err_code)
+   
+        
 def get_cluster_state_parser(subcommand_parsers, common_parser):
 
     get_cluster_state_parser = subcommand_parsers.add_parser('get-cluster-state',
@@ -697,6 +704,63 @@ def remove_image(args):
         obj.remove_image(args.version, args.force)
     except SOSError as e:
         raise e
+        
+def add_log_args(parser):
+    
+    parser.add_argument('-severity', '-sv',
+                                 metavar='<severity>',
+                                 dest='severity',
+                                 help='Any value from 0 to 9(FATAL, EMERG, ALERT, CRIT, ERROR, WARN, NOTICE, INFO, DEBUG, TRACE).',
+				 choices=['0','1','2','3','4', '5','6', '7','8','9'],
+                                 default='7')
+
+    parser.add_argument('-start',
+                                metavar='<start>',
+                                dest='start',
+                                help='start date in yyyy-mm-dd_hh:mm:ss format or in milliseconds',
+                                default='')
+
+    parser.add_argument('-end',
+                                metavar='end',
+                                dest='end',
+                                help='end date in yyyy-mm-dd_hh:mm:ss format or in milliseconds',
+                                default='')
+
+    parser.add_argument('-node',
+                                metavar='<node_id>',
+                                dest='node',
+                                help='Node',
+                                default='')
+
+
+    parser.add_argument('-regular', '-regex',
+                                metavar='<msg_regex>',
+                                dest='regex',
+                                help='Message Regex',
+                                default='')
+
+    parser.add_argument('-format',
+                                metavar='format',
+                                dest='format',
+                                help='Response: xml, json, native, padded',
+                                choices=['xml','json','native','padded'],
+                                default='native') 
+
+    parser.add_argument('-maxcount',
+                                metavar='maxcount',
+                                dest='maxcount',
+                                help='Maximum number of log messages to retrieve',
+                                default='')
+
+    mandatory_args = parser.add_argument_group('mandatory arguments')
+
+
+    mandatory_args.add_argument('-filepath', '-fp',
+                                help='file path',
+                                metavar='<filepath>',
+                                dest='filepath',
+				required=True)
+    
     
 def system_parser(parent_subparser, common_parser):
 
@@ -708,6 +772,8 @@ def system_parser(parent_subparser, common_parser):
     subcommand_parsers = parser.add_subparsers(help='use one of sub-commands')
     
     get_logs_parser(subcommand_parsers, common_parser)
+    
+    get_alerts_parser(subcommand_parsers, common_parser)
 
     get_cluster_state_parser(subcommand_parsers, common_parser)
     
