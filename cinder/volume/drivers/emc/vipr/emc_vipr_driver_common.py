@@ -29,14 +29,14 @@ from cinder import exception
 from cinder.openstack.common import log as logging
 from cinder.volume import volume_types
 
-from lib.authentication import Authentication
-import lib.common as vipr_utils
-from lib.common import SOSError
-from lib.exportgroup import ExportGroup
-from lib.virtualarray import VirtualArray 
-from lib.project import Project
-from lib.snapshot import Snapshot
-from lib.volume import Volume
+from cli.authentication import Authentication
+import cli.common as vipr_utils
+from cli.common import SOSError
+from cli.exportgroup import ExportGroup
+from cli.virtualarray import VirtualArray 
+from cli.project import Project
+from cli.snapshot import Snapshot
+from cli.volume import Volume
 
 LOG = logging.getLogger(__name__)
 
