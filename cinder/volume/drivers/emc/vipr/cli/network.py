@@ -336,7 +336,7 @@ class Network(object):
      # removes an endpoint from a network
     def remove_endpoint(self, varray, name, endpoint):
         '''
-        Adds endpoint to a transport zone
+        Removes endpoint to a transport zone
         Parameters:
             varray: name of the varray
             name: name of network
@@ -673,36 +673,48 @@ def endpoint_parser(subcommand_parsers, common_parser):
                                 help='add/remove endpoints')
     subcommand_parsers = endpoint_parser.add_subparsers(help='Use one of the commands')
 
-
-    common_args = common_parser.add_argument_group('mandatory arguments')
-    common_args.add_argument('-varray', '-va',
+    add_parser=subcommand_parsers.add_parser('add',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Add endpoint')
+    mandatory_args = add_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-varray', '-va',
                                 metavar='<varray>',
                                 dest='varray',
                                 help='Name of varray',
                                 required=True)
-    common_args.add_argument('-name', '-n',
+    mandatory_args.add_argument('-name', '-n',
                                 help='Name of network',
                                 metavar='<network>',
                                 dest='name',
                                 required=True)
-    common_args.add_argument('-endpoint', '-e',
+    mandatory_args.add_argument('-endpoint', '-e',
                                 help='endpoint',
                                 metavar='<endpoint>',
                                 dest='endpoint',
                                 required=True)
-
-    add_parser=subcommand_parsers.add_parser('add',
-			        parents=[common_parser],
-                                conflict_handler='resolve',
-                                help='Add endpoint')
-    remove_parser=subcommand_parsers.add_parser('remove',
-			        parents=[common_parser],
-                                conflict_handler='resolve',
-                                help='Remove endpoint')
-
-
     add_parser.set_defaults(func=add_endpoint)
 
+    remove_parser=subcommand_parsers.add_parser('remove',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Remove endpoint')
+    mandatory_args = remove_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-varray', '-va',
+                                metavar='<varray>',
+                                dest='varray',
+                                help='Name of varray',
+                                required=True)
+    mandatory_args.add_argument('-name', '-n',
+                                help='Name of network',
+                                metavar='<network>',
+                                dest='name',
+                                required=True)
+    mandatory_args.add_argument('-endpoint', '-e',
+                                help='endpoint',
+                                metavar='<endpoint>',
+                                dest='endpoint',
+                                required=True)
     remove_parser.set_defaults(func=remove_endpoint)
     
 def add_endpoint(args):
