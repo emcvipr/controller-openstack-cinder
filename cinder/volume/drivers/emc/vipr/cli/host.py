@@ -37,7 +37,7 @@ class Host(object):
         self.__port = port
         
     
-    def host_create(self, name=None, tenant_name=None, host_name=None, type='Linux'):
+    def host_create(self, name=None, host_name=None, ostype='Linux', project_name=None, tenant_name=None):
         '''
         Makes REST API call to create a host under a tenant
         Parameters:
@@ -57,8 +57,8 @@ class Host(object):
         if (not host_name):
             # fill in the localhost info if host_name isn't provided
             host_name = socket.getfqdn()
-            # override the type
-            type = platform.system()
+            # override the ostype
+            ostype = platform.system()
 
         from tenant import Tenant
         tenant_obj = Tenant(self.__ipAddr, self.__port)
@@ -66,7 +66,7 @@ class Host(object):
             tenant_uri = tenant_obj.tenant_query(tenant_name)
         except SOSError as e:
             raise e
-        
+
         host_already_exists = True
 
         try:
@@ -87,7 +87,15 @@ class Host(object):
         createParams = dict()
         createParams['name'] = name
         createParams['host_name'] = host_name
-        createParams['type'] = type
+        createParams['type'] = ostype
+        if (project_name):
+            from project import Project
+            project_obj = Project(self.__ipAddr, self.__port)
+            try:
+                project_uri = project_obj.project_query(project_name)
+            except SOSError as e:
+                raise e
+            createParams['project'] = project_uri
         body = json.dumps(createParams)
         
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
@@ -184,6 +192,7 @@ class Host(object):
         except SOSError as e:
             raise e
         
+
     def host_delete_by_uri(self, uri):
         '''
         Deletes a host based on host UUID
@@ -194,6 +203,7 @@ class Host(object):
                                              "POST", Host.URI_HOST_DEACTIVATE.format(uri), None)
         return
     
+
     def host_delete(self, name):
         '''
         Deletes a host based on host name
@@ -214,26 +224,30 @@ def create_parser(subcommand_parsers, common_parser):
     create_parser.add_argument('-n', '-name',
                                 metavar='<name>',
                                 dest='name',
-                                help='Name of Host; default = localhost name')
+                                help='Name of Host (default: localhost name)')
     create_parser.add_argument('-x', '-xname',
                                 metavar='<host_name>',
                                 dest='host_name',
-                                help='Hostname; default = localhost fqdn')
-    create_parser.add_argument('-t', '-type',
-                                metavar='<type>',
-                                dest='type',
-                                help='The Type of the Host; default = Linux')
+                                help='Hostname (default: localhost fqdn)')
+    create_parser.add_argument('-t', '-ostype',
+                                metavar='<ostype>',
+                                dest='ostype',
+                                help='The Type of the Host (default: Linux)')
+    create_parser.add_argument('-pr', '-project',
+                                metavar='<project>',
+                                dest='projectname',
+                                help='Name of Project')
     create_parser.add_argument('-tn', '-tenant',
                                 metavar='<tenant>',
                                 dest='tenantname',
-                                help='Name of Tenant')
+                                help='Name of Tenant (default: Provider Tenant)')
     create_parser.set_defaults(func=host_create)
 
 
 def host_create(args):
     obj = Host(args.ip, args.port)
     try:
-        obj.host_create(args.name, args.tenantname, args.host_name, args.type)
+        obj.host_create(args.name, args.host_name, args.ostype, args.projectname, args.tenantname)
     except SOSError as e:
         if (e.err_code in [SOSError.NOT_FOUND_ERR, SOSError.ENTRY_ALREADY_EXISTS_ERR]):
             raise SOSError(e.err_code,
@@ -245,7 +259,7 @@ def host_create(args):
 def delete_parser(subcommand_parsers, common_parser):
     # delete command parser
     delete_parser = subcommand_parsers.add_parser('delete',
-                                description='StorageOS Host Delete CLI usage.',
+                                description='ViPR Host Delete CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Delete a host')
@@ -279,7 +293,7 @@ def host_delete(args):
 # show command parser
 def show_parser(subcommand_parsers, common_parser):
     show_parser = subcommand_parsers.add_parser('show',
-                                description='StorageOS Host Show CLI usage.',
+                                description='ViPR Host Show CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Show host details')
@@ -317,7 +331,7 @@ def host_show(args):
 # list command parser
 def list_parser(subcommand_parsers, common_parser):
     list_parser = subcommand_parsers.add_parser('list',
-                                description='StorageOS Host List CLI usage.',
+                                description='ViPR Host List CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Lists hosts under a tenant')
