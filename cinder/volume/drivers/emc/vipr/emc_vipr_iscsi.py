@@ -60,6 +60,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
     def create_volume(self, volume):
         """Creates a EMC Volume. """
         self.common.create_volume(volume)
+        self.common.setTags(volume)
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""

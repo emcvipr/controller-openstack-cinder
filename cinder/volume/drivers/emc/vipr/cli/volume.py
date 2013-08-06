@@ -12,6 +12,7 @@
 
 import common
 import json
+import time
 from common import SOSError
 from threading import Timer
 from virtualarray import VirtualArray
@@ -32,6 +33,7 @@ class Volume(object):
     URI_VOLUME_UNEXPORTS = URI_VOLUME_EXPORTS + '/{1},{2},{3}'
     URI_VOLUME_CONSISTENCYGROUP = URI_VOLUME + '/consistency-group'
     URI_PROJECT_RESOURCES = '/projects/{0}/resources'
+    URI_VOLUME_TAGS = URI_VOLUME + '/tags'
     URI_BULK_DELETE = URI_VOLUMES + '/deactivate'
     URI_DEACTIVATE = URI_VOLUME + '/deactivate'
     URI_EXPAND = URI_VOLUME + '/expand'
@@ -613,6 +615,77 @@ class Volume(object):
         o = common.json_decode(s)
         return o
 
+
+    # Update a volume information
+    def getTags(self, name):
+        '''
+        Makes REST API call to update a volumes tags
+        Parameters:
+            name:       name of the volume 
+        Returns
+            JSON response of current tags
+        '''
+
+        volume_uri = self.volume_query(name)
+
+
+        requri = Volume.URI_VOLUME_TAGS.format(volume_uri)
+	
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
+                                             "GET",
+                                             requri, 
+                                             None)
+
+
+	allTags=[]
+	try:
+	    o = common.json_decode(s)
+	    allTags = o['tag']
+	except KeyError as e:
+	    return []
+	
+        return allTags
+
+
+
+    # Update a volume information
+    def modifyTags(self, name, addTags, removeTags):
+        '''
+        Makes REST API call to update a volumes tags
+        Parameters:
+            name:       name of the volume to be updated
+	    addTags:    tags to add, or None
+            remvoeTags: tags to remove, or None
+        Returns
+            Nothing
+        '''
+
+        if (addTags==None and removeTags==None):
+	    return
+
+        volume_uri = self.volume_query(name)
+        
+
+        if (addTags!=None and removeTags!=None):
+	    body = json.dumps({'add':addTags, 'remove':removeTags})
+        if (addTags!=None and removeTags==None):
+	    body = json.dumps({'add':addTags})
+        if (addTags==None and removeTags!=None):
+	    body = json.dumps({'remove':removeTags})
+
+
+        requri = Volume.URI_VOLUME_TAGS.format(volume_uri)
+	
+        common.service_json_request(self.__ipAddr, self.__port, 
+                                             "PUT",
+                                             requri, 
+                                             body)
+
+        return
+
+
+
+
     # Exports a volume to a host given a volume name, initiator and hlu
     def export(self, name, protocol, initiator_port, initiator_node, hlu, host_id, sync):
         '''
@@ -795,6 +868,10 @@ class Volume(object):
                 print "Operation timed out."
                 self.isTimeout=False
                 break
+	    
+	    # sleep for a second
+	    time.sleep(1)
+	    
         return
     
     def list_tasks(self, project_name, volume_name=None, task_id=None):

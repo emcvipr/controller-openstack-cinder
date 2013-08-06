@@ -27,7 +27,6 @@ done
 
 echo "*** instance is now available"
 
-
 cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMETYPE}" 1
 cinder list
 
@@ -46,5 +45,15 @@ INSTANCE=$( nova list | grep "${INSTNAME}" | cut -f2 -d' ')
 VOLUME=$( cinder list | grep "${VOLNAME}" | cut -f2 -d' ')
 
 # ok, now attach the volume
-nova volume-attach ${INSTANCE} ${VOLUME} ${MNT}
+# nova volume-attach ${INSTANCE} ${VOLUME} ${MNT}
+
+read -p "Press [Enter] to continue and delete both the volume and instance"
+
+# now delete the volume
+echo "*** deleting the volume"
+cinder delete $VOLUME
+
+# and the instance
+echo "*** deleting the instance"
+nova delete $INSTANCE
 

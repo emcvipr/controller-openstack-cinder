@@ -45,7 +45,11 @@ CONF = cfg.CONF
 CINDER_EMC_CONFIG_FILE = '/etc/cinder/cinder_emc_config.xml'
 
 
+
 class EMCViPRDriverCommon():
+    
+    OPENSTACK_TAG = 'OpenStack'
+    
     def __init__(self, prtcl, configuration=None):
         opt = cfg.StrOpt('cinder_emc_config_file',
                          default=CINDER_EMC_CONFIG_FILE,
@@ -171,9 +175,52 @@ class EMCViPRDriverCommon():
         except SOSError as e:
             if(e.err_code == SOSError.SOS_FAILURE_ERR):
                 raise SOSError(SOSError.SOS_FAILURE_ERR, "Volume " +
-                               name + ": Create failed\n" + e.err_text)
+                               name + ": Tag failed\n" + e.err_text)
             else:
                 raise e
+            
+                
+
+    def setTags(self, vol):
+        self.authenticate_user()
+        name = vol['name']
+        
+        obj = Volume(self.fqdn, self.port)
+        
+                
+        # first, get the current tags that start with the OPENSTACK_TAG eyecatcher
+        removeTags=[]
+        currentTags = obj.getTags(self.tenant + "/" + self.project + "/" + name)
+        for cTag in currentTags:
+            if (cTag.startswith(self.OPENSTACK_TAG)):
+                removeTags.append(cTag)
+
+        try:
+            if (len(removeTags)>0):
+                obj.modifyTags(self.tenant + "/" + self.project + "/" + name, None, removeTags)
+        except SOSError as e:
+            if (e.err_code == SOSError.SOS_FAILURE_ERR):
+                LOG.debug("SOSError adding the tag: " + e.err_text)
+        
+        
+        # now add the tags for the volume
+        addTags=[]
+        # put all the openstack volume properties into the ViPR volume
+        for prop, value in vars(vol).iteritems():
+            try:
+                # don't put the status in, it's always the status before the current transaction
+                if (not prop.startswith("status")):
+                    addTags.append(self.OPENSTACK_TAG+":"+prop+":"+value)
+            except Exception:
+                pass
+        
+        try:
+            obj.modifyTags(self.tenant + "/" + self.project + "/" + name, addTags, None)
+        except SOSError as e:
+            if (e.err_code == SOSError.SOS_FAILURE_ERR):
+                LOG.debug("SOSError adding the tag: " + e.err_text)
+                
+        return obj.getTags(self.tenant + "/" + self.project + "/" + name)    
 
     def delete_volume(self, vol):
         self.authenticate_user()
