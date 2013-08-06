@@ -27,7 +27,8 @@ done
 
 echo "*** instance is now available"
 
-cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMETYPE}" 1
+#cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMETYPE}" 1
+cinder create  --volume-type "${VOLUMETYPE}" 1
 cinder list
 
 echo "Waiting for volume to be created"
