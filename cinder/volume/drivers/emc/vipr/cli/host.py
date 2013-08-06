@@ -202,7 +202,7 @@ class Host(object):
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "POST", Host.URI_HOST_DEACTIVATE.format(uri), None)
         return
-    
+
 
     def host_delete(self, name):
         '''
@@ -212,7 +212,26 @@ class Host(object):
         '''
         host_uri = self.host_query(name)
         return self.host_delete_by_uri(host_uri)
- 
+
+
+    def host_add_initiator(self, name, initiatorPort, protocol='iSCSI', initiatorNode=None):
+        #construct the body 
+        
+        initiatorParams = dict()
+        if (not protocol):
+            protocol = 'iSCSI'
+        initiatorParams['protocol'] = protocol
+        if (initiatorNode):
+            initiatorParams['initiator_node'] = initiatorNode  
+        initiatorParams['initiator_port'] = initiatorPort 
+
+        body = json.dumps(initiatorParams)
+        uri = self.host_query(name)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
+                        "POST", self.URI_HOST_INITIATORS.format(uri), body)
+        o = common.json_decode(s)
+        return o
+
 
 def create_parser(subcommand_parsers, common_parser):
     # create command parser
@@ -380,11 +399,51 @@ def host_list(args):
         raise e
     
 
+def add_initiator_parser(subcommand_parsers, common_parser):
+    # add initiator command parser
+    add_initiator_parser = subcommand_parsers.add_parser('add_initiator',
+                description='ViPR Host Add Initiator cli usage.',
+                parents=[common_parser],
+                conflict_handler='resolve',
+                help='Add an initiator to host')
+    mandatory_args = add_initiator_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                metavar='<name>',
+                dest='name',
+                help='name of Host',
+                required=True)  
+    mandatory_args.add_argument('-initiatorPort', '-inp',
+                metavar='<InitiatorPort>',
+                dest='initiatorPort',
+                help='Initiator Port',
+                required=True)
+    add_initiator_parser.add_argument('-protocol', '-pl',
+                metavar='<Protocol>',
+                dest='protocol',
+                help='Protocol (default: iSCSI)')
+    add_initiator_parser.add_argument('-initiatorNode', '-inn',
+                metavar='<InitiatorNode>',
+                dest='initiatorNode',
+                help='Initiator Node')
+    add_initiator_parser.set_defaults(func=host_add_initiator)
+
+def host_add_initiator(args):
+    try:
+        obj = Host(args.ip, args.port)
+        if(args.protocol == "FC" and args.initiatorNode == None):
+            return SOSError(SOSError.SOS_FAILURE_ERR, "argument -initiatorNode/-inn is required for " + args.protocol + " protocol")
+
+        res = obj.host_add_initiator(args.name,
+                                     args.initiatorPort,
+                                     args.protocol, 
+                                     args.initiatorNode)
+    except SOSError as e:
+        raise SOSError(SOSError.SOS_FAILURE_ERR, "Add initiator " + str(args.initiatorPort) + ": failed:\n" + e.err_text)
+        
 # Host Main parser routine
 def host_parser(parent_subparser, common_parser):
     # main host parser
 
-    # import pdb; pdb.set_trace()
     parser = parent_subparser.add_parser('host',
                                 description='ViPR Host CLI usage',
                                 parents=[common_parser],
@@ -403,4 +462,7 @@ def host_parser(parent_subparser, common_parser):
 
     # list command parser
     list_parser(subcommand_parsers, common_parser)
+
+    # add initiators to host command parser
+    add_initiator_parser(subcommand_parsers, common_parser)
 
