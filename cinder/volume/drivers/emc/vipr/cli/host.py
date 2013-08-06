@@ -14,6 +14,9 @@ from common import SOSError
 import json
 import platform
 import socket
+from tenant import Tenant
+from project import Project
+from cluster import Cluster
 
 
 class Host(object):
@@ -37,7 +40,7 @@ class Host(object):
         self.__port = port
         
     
-    def host_create(self, name=None, host_name=None, ostype='Linux', project_name=None, tenant_name=None):
+    def host_create(self, name=None, host_name=None, ostype='Linux', cluster_name=None, project_name=None, tenant_name=None):
         '''
         Makes REST API call to create a host under a tenant
         Parameters:
@@ -60,7 +63,6 @@ class Host(object):
             # override the ostype
             ostype = platform.system()
 
-        from tenant import Tenant
         tenant_obj = Tenant(self.__ipAddr, self.__port)
         try:
             tenant_uri = tenant_obj.tenant_query(tenant_name)
@@ -81,15 +83,20 @@ class Host(object):
 
         if (host_already_exists):
             raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                           "Host with name: " + name + 
-                           " already exists")
+                           "Host with name: " + name + " already exists")
 
         createParams = dict()
         createParams['name'] = name
         createParams['host_name'] = host_name
         createParams['type'] = ostype
+        if (cluster_name):
+            cluster_obj = Cluster(self.__ipAddr, self.__port)
+            try:
+                cluster_uri = cluster_obj.cluster_query(cluster_name)
+            except SOSError as e:
+                raise e
+            createParams['cluster'] = cluster_uri
         if (project_name):
-            from project import Project
             project_obj = Project(self.__ipAddr, self.__port)
             try:
                 project_uri = project_obj.project_query(project_name)
@@ -111,7 +118,6 @@ class Host(object):
         Returns:
             List of host UUIDs in JSON response payload 
         '''
-        from tenant import Tenant
         tenant_obj = Tenant(self.__ipAddr, self.__port)
         try:
             tenant_uri = tenant_obj.tenant_query(tenant_name)
@@ -176,7 +182,6 @@ class Host(object):
             return name
         (tenant_name, host_name) = common.get_parent_child_from_xpath(name)
         
-        from tenant import Tenant
         tenant_obj = Tenant(self.__ipAddr, self.__port)
         
         try:
@@ -244,7 +249,7 @@ def create_parser(subcommand_parsers, common_parser):
                                 metavar='<name>',
                                 dest='name',
                                 help='Name of Host (default: localhost name)')
-    create_parser.add_argument('-x', '-xname',
+    create_parser.add_argument('-noh', '-nameofhost',
                                 metavar='<host_name>',
                                 dest='host_name',
                                 help='Hostname (default: localhost fqdn)')
@@ -252,6 +257,10 @@ def create_parser(subcommand_parsers, common_parser):
                                 metavar='<ostype>',
                                 dest='ostype',
                                 help='The Type of the Host (default: Linux)')
+    create_parser.add_argument('-cl', '-cluster',
+                                metavar='<cluster>',
+                                dest='clustername',
+                                help='Name of Cluster')
     create_parser.add_argument('-pr', '-project',
                                 metavar='<project>',
                                 dest='projectname',
@@ -266,7 +275,7 @@ def create_parser(subcommand_parsers, common_parser):
 def host_create(args):
     obj = Host(args.ip, args.port)
     try:
-        obj.host_create(args.name, args.host_name, args.ostype, args.projectname, args.tenantname)
+        obj.host_create(args.name, args.host_name, args.ostype, args.clustername, args.projectname, args.tenantname)
     except SOSError as e:
         if (e.err_code in [SOSError.NOT_FOUND_ERR, SOSError.ENTRY_ALREADY_EXISTS_ERR]):
             raise SOSError(e.err_code,
