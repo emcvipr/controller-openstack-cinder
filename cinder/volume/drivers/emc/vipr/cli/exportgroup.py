@@ -17,13 +17,15 @@ import argparse
 import sys
 import os
 import volume
+import uuid
+import json
 from volume import Volume
 from snapshot import Snapshot
 from common import SOSError
 from project import Project
 from virtualarray import VirtualArray
-import uuid
-import json
+from cluster import Cluster
+from host import Host
 
 class ExportGroup(object):
     '''
@@ -126,14 +128,18 @@ class ExportGroup(object):
                                              self.URI_EXPORT_GROUPS_STORAGEPORTS.format(uri), None)
         return common.json_decode(s)  
     
-    def exportgroup_create(self, name, project, tenant, varray):
+    def exportgroup_create(self, name, project, tenant, varray, export_type, export_destination):
         '''
-        This function will take export group name and project name  as input and
+        This function will take export group name and project name as input and
         It will create the Export group with given name.
         parameters:
            name : Name of the export group.
            project: Name of the project path.
            tenant: Container tenant name.
+           export_type: Exclusive, Host, Cluster
+           export_destination: initiator WWN or iSCSI iqn if export_type == Exclusive
+                               host name if export_type == Host
+                               cluster name of export_type == Cluster
         return
             returns with status of creation. 
         '''
@@ -145,19 +151,37 @@ class ExportGroup(object):
                 if(tenant == None):
                     tenant = ""
                 fullproj = tenant + "/" + project
-	        projobj = Project(self.__ipAddr, self.__port)
+                projobj = Project(self.__ipAddr, self.__port)
                 projuri = projobj.project_query(fullproj) 
-				
-		nh_obj = VirtualArray(self.__ipAddr, self.__port)
-		nhuri = nh_obj.varray_query(varray)
-				
-		parms = {
-			'name' : name,
-			'project' : projuri,
-			'varray' : nhuri,
-			}
-                body = json.dumps(parms)
-                   
+                                
+                nh_obj = VirtualArray(self.__ipAddr, self.__port)
+                nhuri = nh_obj.varray_query(varray)
+                                
+                params = {
+                        'name' : name,
+                        'project' : projuri,
+                        'varray' : nhuri
+                        }
+                if (export_type):
+                    params['type'] = export_type
+                if (export_type == 'Cluster'):
+                    cluster_obj = Cluster(self.__ipAddr, self.__port)
+                    try:
+                        cluster_uri = cluster_obj.cluster_query(export_destination)
+                    except SOSError as e:
+                        raise e
+                    params['clusters'] = [cluster_uri]
+                elif (export_type == 'Host'):
+                    host_obj = Host(self.__ipAddr, self.__port)
+                    try:
+                        host_uri = host_obj.host_query(export_destination)
+                    except SOSError as e:
+                        raise e
+                    params['hosts'] = [host_uri]
+                # else:   # export_type == Exclusive
+                    # TODO: add code for initiator
+
+                body = json.dumps(params)
                 (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
                                              self.URI_EXPORT_GROUP, body)
                 o = common.json_decode(s)
@@ -221,10 +245,10 @@ class ExportGroup(object):
         initParam['initiator_port'] = initiatorPort 
         initParam['hostname'] = hostname
 
-	parms = {
+        parms = {
            'initiator' : [ initParam ]
         }
-		
+                
         body = json.dumps(parms)
         uri = self.exportgroup_query(name, project, tenant)
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
@@ -244,7 +268,7 @@ class ExportGroup(object):
     def exportgroup_add_volumes(self, name, project, tenant, volume, lun, snapshot):
         if(tenant == None):
             tenant = ""
-	fullvolname = tenant+"/"+project+"/"+volume
+        fullvolname = tenant+"/"+project+"/"+volume
         volobj =  Volume(self.__ipAddr, self.__port)
         volumeURI = volobj.volume_query(fullvolname)
 
@@ -262,7 +286,7 @@ class ExportGroup(object):
         parms = {
             'volume' : [volparms]
         }
-			        
+                                
         token = "cli_export_group_add_volume:" + fullvolname
         body = json.dumps(parms)
         uri = self.exportgroup_query(name, project, tenant)
@@ -314,21 +338,29 @@ def create_parser(subcommand_parsers, common_parser):
                 dest='project',
                 help='container project name',
                 required=True)
-    create_parser.add_argument('-tenant', '-tn',
-                metavar='<tenantname>',
-                dest='tenant',
-                help='container tenant name')
     mandatory_args.add_argument('-varray', '-va',
                 metavar='<varray>',
                 dest='varray',
                 help='varray for export',
                 required=True)
+    create_parser.add_argument('-tenant', '-tn',
+                metavar='<tenantname>',
+                dest='tenant',
+                help='container tenant name')
+    create_parser.add_argument('-exporttype', '-et',
+                metavar='<exporttype>',
+                dest='export_type',
+                help='export type (default: Exclusive)')
+    create_parser.add_argument('-exportdestination', '-ed',
+                metavar='<exportdestination>',
+                dest='export_destination',
+                help='name of initiator, host or cluster')
     create_parser.set_defaults(func=exportgroup_create)
 
 def exportgroup_create(args):
     try:
         obj = ExportGroup(args.ip, args.port)
-        res = obj.exportgroup_create(args.name, args.project, args.tenant, args.varray)
+        res = obj.exportgroup_create(args.name, args.project, args.tenant, args.varray, args.export_type, args.export_destination)
     except SOSError as e:
         raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + args.name + ": Create failed:\n" + e.err_text)
         
@@ -472,7 +504,7 @@ def exportgroup_list(args):
                     eg['volumes_snapshots']=volnames
                     output.append(eg)
             
-	    if(args.verbose == True):
+            if(args.verbose == True):
                 return common.format_json_object(output)
             if(len(output) > 0):
                 if(args.long == True):
@@ -641,7 +673,7 @@ def exportgroup_add_Initiators(args):
                                        args.protocol, 
                                        args.initiatorNode, 
                                        args.initiatorPort,
-				       args.hostname)
+                                       args.hostname)
     except SOSError as e:
         raise SOSError(SOSError.SOS_FAILURE_ERR, "Add initiator " + str(args.initiatorPort) + ": failed:\n" + e.err_text)
         
