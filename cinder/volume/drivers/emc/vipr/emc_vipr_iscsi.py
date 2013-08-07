@@ -271,4 +271,4 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
     def update_volume_stats(self):
         """Retrieve stats info from virtual pool/virtual array."""
         LOG.debug(_("Updating volume stats"))
-        self._stats = self.common.update_volume_stats()
+        #self._stats = self.common.update_volume_stats()
