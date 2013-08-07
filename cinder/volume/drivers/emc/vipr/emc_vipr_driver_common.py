@@ -37,13 +37,21 @@ LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 
 CINDER_EMC_CONFIG_FILE = '/etc/cinder/cinder_emc_config.xml'
-
+URI_VPOOL_VARRAY_CAPACITY = '/block/vpools/{0}/varrays/{1}/capacity'
 
 
 class EMCViPRDriverCommon():
     
     OPENSTACK_TAG = 'OpenStack'
-    
+  
+    stats = {'driver_version': '1.0',
+             'free_capacity_gb': 'unknown',
+             'reserved_percentage': 'unknown',
+             'storage_protocol': 'iSCSI',
+             'total_capacity_gb': 'unknown',
+             'vendor_name': 'EMC',
+             'volume_backend_name': 'EMCViPRISCSIDriver'}
+             
     def __init__(self, prtcl, configuration=None):
         opt = cfg.StrOpt('cinder_emc_config_file',
                          default=CINDER_EMC_CONFIG_FILE,
@@ -468,3 +476,46 @@ class EMCViPRDriverCommon():
                 vpool[key] = value
 
         return vpool
+
+    def update_volume_stats(self):
+        """Retrieve stats info."""
+        LOG.debug(_("Updating volume stats"))
+        self.authenticate_user()
+ 
+        volume = Volume(self.fqdn, self.port)
+        try:
+            vols = volume.list_volumes(self.tenant + "/" + self.project)
+            vpairs = set()            
+            if (len(vols) > 0):
+                for vol in vols:
+                    if(vol):              
+                        vpair = (vol["vpool"]["id"], vol["varray"]["id"])
+                        if (vpair not in vpairs):
+                            vpairs.add(vpair)
+
+            if (len(vpairs) > 0):            
+                free_gb = 0.0
+                used_gb = 0.0
+                provisioned_gb = 0.0
+                precent_used = 0.0
+                percent_provisioned = 0.0            
+                for vpair in vpairs:            
+                    if(vpair): 
+                        (s, h) = vipr_utils.service_json_request(self.fqdn, self.port,
+                                      "GET",
+                                      URI_VPOOL_VARRAY_CAPACITY.format(vpair[0], vpair[1]),
+                                      None)
+                        capacity = vipr_utils.json_decode(s)
+                        
+                        free_gb += float(capacity["free_gb"])
+                        used_gb += float(capacity["used_gb"])
+                        provisioned_gb += float(capacity["provisioned_gb"])
+                        
+                self.stats['free_capacity_gb'] = free_gb
+                self.stats['total_capacity_gb'] = free_gb + used_gb
+                self.stats['reserved_percentage'] = 100 * provisioned_gb/(free_gb + used_gb)
+
+            return self.stats
+
+        except SOSError as e:
+            raise e

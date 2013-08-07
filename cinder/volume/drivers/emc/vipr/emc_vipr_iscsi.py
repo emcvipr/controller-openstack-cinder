@@ -33,14 +33,6 @@ LOG = logging.getLogger(__name__)
 class EMCViPRISCSIDriver(driver.ISCSIDriver):
     """EMC ViPR iSCSI Driver"""
 
-    stats = {'driver_version': '1.0',
-             'free_capacity_gb': 0,
-             'reserved_percentage': 0,
-             'storage_protocol': None,
-             'total_capacity_gb': 0,
-             'vendor_name': 'EMC',
-             'volume_backend_name': None}
-
     def __init__(self, *args, **kwargs):
 
         super(EMCViPRISCSIDriver, self).__init__(*args, **kwargs)
@@ -272,15 +264,11 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         If 'refresh' is True, run update the stats first.
         """
         if refresh:
-            self.update_volume_status()
+            self.update_volume_stats()
 
         return self._stats
 
-    def update_volume_status(self):
-        """Retrieve status info from volume group."""
-        LOG.debug(_("Updating volume status"))
-        self.stats['volume_backend_name'] = 'EMCViPRISCSIDriver'
-        self.stats['storage_protocol'] = 'iSCSI'
-        self.stats['total_capacity_gb'] = 'unknown' 
-        self.stats['free_capacity_gb'] = 'unknown'
-        self._stats = self.stats
+    def update_volume_stats(self):
+        """Retrieve stats info from virtual pool/virtual array."""
+        LOG.debug(_("Updating volume stats"))
+        self._stats = self.common.update_volume_stats()
