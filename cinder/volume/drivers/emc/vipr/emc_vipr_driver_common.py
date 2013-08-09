@@ -45,6 +45,7 @@ URI_VPOOL_VARRAY_CAPACITY = '/block/vpools/{0}/varrays/{1}/capacity'
 class EMCViPRDriverCommon():
     
     OPENSTACK_TAG = 'OpenStack'
+    AUTHENTICATED = False
   
     stats = {'driver_version': '1.0',
              'free_capacity_gb': 'unknown',
@@ -145,9 +146,14 @@ class EMCViPRDriverCommon():
         return viprinfo
 
     def authenticate_user(self):
-        obj = Authentication(self.fqdn, self.port)
-        cookiedir = os.getcwd()
-        obj.authenticate_user(self.user, self.password, cookiedir, None)
+        # we should check to see if we are already authenticated before blindly doing it again
+        if (self.AUTHENTICATED == False ):
+            import pdb; pdb.set_trace()
+            LOG.debug("Authenticating user")
+            obj = Authentication(self.fqdn, self.port)
+            cookiedir = os.getcwd()
+            obj.authenticate_user(self.user, self.password, cookiedir, None)
+            self.AUTHENTICATED = True
 
     def create_volume(self, vol):
         self.authenticate_user()
