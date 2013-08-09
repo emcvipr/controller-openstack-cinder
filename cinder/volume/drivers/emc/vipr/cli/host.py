@@ -9,11 +9,13 @@
 # limited to the terms and conditions of the License Agreement under which
 # it is provided by or on behalf of EMC.
 
-import common
-from common import SOSError
 import json
 import platform
 import socket
+
+import common
+from common import SOSError
+from common import TableGenerator
 from tenant import Tenant
 from project import Project
 from cluster import Cluster
@@ -40,7 +42,7 @@ class Host(object):
         self.__port = port
         
     
-    def host_create(self, name=None, host_name=None, ostype='Linux', cluster_name=None, project_name=None, tenant_name=None):
+    def host_create(self, name=None, project_name=None, tenant_name=None, host_name=None, ostype='Linux', cluster_name=None):
         '''
         Makes REST API call to create a host under a tenant
         Parameters:
@@ -113,10 +115,11 @@ class Host(object):
 
     def host_list(self, tenant_name):
         '''
-        Makes REST API call and retrieves hosts based on tenant UUID
-        Parameters: None
+        Makes REST API call and retrieves hosts based on tenant name
+        Parameters: 
+            tenant_name: name of the tenant
         Returns:
-            List of host UUIDs in JSON response payload 
+            List of host UUIDs in JSON response payload
         '''
         tenant_obj = Tenant(self.__ipAddr, self.__port)
         try:
@@ -238,6 +241,16 @@ class Host(object):
         return o
 
 
+    # Return a list of initiator_ports in the given host
+    def host_query_initiators(self, uri):
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
+                        "GET", self.URI_HOST_INITIATORS.format(uri), None)
+        o = common.json_decode(s)
+        if ('initiator' in o):        
+            return common.get_list(o, 'initiator')
+        return []
+
+
 def create_parser(subcommand_parsers, common_parser):
     # create command parser
     create_parser = subcommand_parsers.add_parser('create',
@@ -275,7 +288,7 @@ def create_parser(subcommand_parsers, common_parser):
 def host_create(args):
     obj = Host(args.ip, args.port)
     try:
-        obj.host_create(args.name, args.host_name, args.ostype, args.clustername, args.projectname, args.tenantname)
+        obj.host_create(args.name, args.projectname, args.tenantname, args.host_name, args.ostype, args.clustername)
     except SOSError as e:
         if (e.err_code in [SOSError.NOT_FOUND_ERR, SOSError.ENTRY_ALREADY_EXISTS_ERR]):
             raise SOSError(e.err_code,
@@ -382,15 +395,14 @@ def list_parser(subcommand_parsers, common_parser):
 def host_list(args):
     obj = Host(args.ip, args.port)
     try:
-        from common import TableGenerator
         hosts = obj.host_list(args.tenantname)
         records = []
         for host in hosts:
-            proj_detail = obj.host_show_by_uri(host['id'])
-            if(proj_detail):
-                if("tenant" in proj_detail and "name" in proj_detail["tenant"]):
-                    del proj_detail["tenant"]["name"]
-                records.append(proj_detail)
+            host_detail = obj.host_show_by_uri(host['id'])
+            if(host_detail):
+                if("tenant" in host_detail and "name" in host_detail["tenant"]):
+                    del host_detail["tenant"]["name"]
+                records.append(host_detail)
                 
         if(len(records) > 0):
             if(args.verbose == True):
@@ -436,6 +448,7 @@ def add_initiator_parser(subcommand_parsers, common_parser):
                 help='Initiator Node')
     add_initiator_parser.set_defaults(func=host_add_initiator)
 
+
 def host_add_initiator(args):
     try:
         obj = Host(args.ip, args.port)
@@ -449,6 +462,33 @@ def host_add_initiator(args):
     except SOSError as e:
         raise SOSError(SOSError.SOS_FAILURE_ERR, "Add initiator " + str(args.initiatorPort) + ": failed:\n" + e.err_text)
         
+
+def query_initiators_parser(subcommand_parsers, common_parser):
+    # query initiators command parser
+    query_initiators_parser = subcommand_parsers.add_parser('query_initiators',
+                description='ViPR Host Query Initiators cli usage.',
+                parents=[common_parser],
+                conflict_handler='resolve',
+                help='Query initiators of host')
+    mandatory_args = query_initiators_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                metavar='<name>',
+                dest='name',
+                help='name of Host',
+                required=True)  
+    query_initiators_parser.set_defaults(func=host_query_initiators)
+
+
+def host_query_initiators(args):
+    try:
+        obj = Host(args.ip, args.port)
+        host_uri = obj.host_query(args.name)
+        records = obj.host_query_initiators(host_uri)
+        TableGenerator(records, ['name']).printTable()
+    except SOSError as e:
+        raise SOSError(SOSError.SOS_FAILURE_ERR, "Query initiators of Host " + args.name + " failed:\n" + e.err_text)
+        
+
 # Host Main parser routine
 def host_parser(parent_subparser, common_parser):
     # main host parser
@@ -472,6 +512,9 @@ def host_parser(parent_subparser, common_parser):
     # list command parser
     list_parser(subcommand_parsers, common_parser)
 
-    # add initiators to host command parser
+    # add an initiator to host command parser
     add_initiator_parser(subcommand_parsers, common_parser)
+
+    # query initiators to host command parser
+    query_initiators_parser(subcommand_parsers, common_parser)
 

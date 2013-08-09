@@ -11,6 +11,7 @@
 
 
 import os
+import socket
 import random
 import string
 from oslo.config import cfg
@@ -31,6 +32,7 @@ from cli.virtualarray import VirtualArray
 from cli.project import Project
 from cli.snapshot import Snapshot
 from cli.volume import Volume
+from cli.host import Host
 
 LOG = logging.getLogger(__name__)
 
@@ -64,6 +66,7 @@ class EMCViPRDriverCommon():
 
         self._get_vipr_info()
         vipr_utils.COOKIE = None
+
 
     def _get_vipr_info(self, filename=None):
         if filename == None:
@@ -152,7 +155,7 @@ class EMCViPRDriverCommon():
         size = int(vol['size']) * 1073741824
         obj = Volume(self.fqdn, self.port)
 
-        vpool = self.get_vpool(vol)
+        vpool = self._get_vpool(vol)
         self.vpool = vpool['ViPR:VPOOL']
 
         try:
@@ -180,7 +183,6 @@ class EMCViPRDriverCommon():
                                name + ": Tag failed\n" + e.err_text)
             else:
                 raise e
-            
                 
 
     def setTags(self, vol):
@@ -305,57 +307,45 @@ class EMCViPRDriverCommon():
             self.authenticate_user()
             volumename = volume['name']            
             obj = ExportGroup(self.fqdn, self.port)
-
-            foundgroupname = None
-            tenantproject = self.tenant+ '/' + self.project
-            # grouplist = obj.exportgroup_list(tenantproject)
-            grouplist = obj.exportgroup_list(self.project, self.tenant)
-
-            for groupid in grouplist:
-                #groupdetails = obj.exportgroup_show_uri(groupid)
-                groupdetails = obj.exportgroup_show(groupid, self.project, self.tenant)
-                initiators = groupdetails['initiators']
-                for initiator in initiators:
-                    try:
-                        # if (initiator['initiator_node'] == initiatorNode and
-                        if (initiator['initiator_port'] == initiatorPort):
-                            foundgroupname = groupdetails['name']
-                            break
-                    except KeyError as e:
-                        foundgroupname = None 
-
-                    if foundgroupname is not None:
-                        break
-
-            if foundgroupname is not None:
-                # res = obj.exportgroup_add_volumes(foundgroupname, tenantproject, volumename, None)
-                res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
-            else:
+            foundgroupname = self._find_exportgroup(obj, initiatorPort)
+            if (foundgroupname is None):
                 foundgroupname = hostname + 'SG'
                 # create a unique name
                 foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
-                # res = obj.exportgroup_create(foundgroupname, tenantproject, self.virtualarray, protocol, initiatorNode, initiatorPort, hostname, volumename)
-                res = obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray)
-                res = obj.exportgroup_add_initiator(foundgroupname, self.project, self.tenant, protocol, initiatorNode, initiatorPort, hostname)
-                res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
+                # check if this initiator is contained in any ViPR Host object
+                foundhostname= self._find_host(initiatorPort)
+                if (foundhostname is None):
+                    if (not _host_exists(hostname)):
+                        # create a host so it can be added to the export group
+                        host_obj = Host(self.fqdn, self.port)
+                        host_obj.host_create(hostname, self.project, self.tenant, socket.getfqdn())
+                        LOG.info("Created host " + hostname)
+                    # add the initiator to the host
+                    host_obj.host_add_initiator(hostname, initiatorPort, protocol, initiatorNode);
+                    foundhostname = hostname
+                    LOG.info("Initiator " + initiatorPort + " added to host " + hostname)
+                else:
+                    LOG.info("Found host " + foundhostname +
+                            " containing initiator " + initiatorPort +
+                            "; add this host to the export group.")
 
+                res = obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray, 'Host', foundhostname);
+
+            res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
 
             # Wait for LUN to be really attached
-            device_info = self.find_device_number(volume)
-            try:
-                device_number = device_info['hostlunid']
-            except KeyError as e:
-                device_number = None
+            device_number = None
             while (device_number is None or device_number == '-1'):
-                time.sleep(10)
                 device_info = self.find_device_number(volume)
                 try:
                     device_number = device_info['hostlunid']
                 except KeyError as e:
                     device_number = None
+                if (device_number is None or device_number == '-1'):
+                    time.sleep(10)
 
         except SOSError as e:
-            raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + foundgroupname + ": Create failed: " + e.err_text)
+            raise SOSError(SOSError.SOS_FAILURE_ERR, "Attach volume (" + volume['name'] + ") to host (" + hostname + ") initiator (" + initiatorPort + ") failed: " + e.err_text)
 
 
     def terminate_connection(self, volume, 
@@ -369,32 +359,12 @@ class EMCViPRDriverCommon():
             volid = voldetails['id']
 
             obj = ExportGroup(self.fqdn, self.port)
-
-            foundgroupname = None
-            tenantproject = self.tenant+ '/' + self.project
-            grouplist = obj.exportgroup_list(self.project, self.tenant)
-            for groupid in grouplist:
-                #groupdetails = obj.exportgroup_show_uri(groupid)
-                groupdetails = obj.exportgroup_show(groupid, self.project, self.tenant)
-                initiators = groupdetails['initiators']
-                for initiator in initiators:
-                    if (initiator['initiator_node'] == initiatorNode and
-                        initiator['initiator_port'] == initiatorPort):
-                        vols = groupdetails['volumes']
-                        for vol in vols:
-                            if vol['id'] == volid:
-                                foundgroupname = groupdetails['name']
-                                break
-                        if foundgroupname is not None:
-                            break
-
-                if foundgroupname is not None:
-                    break
-
+            foundgroupname = self._find_exportgroup(obj, initiatorPort)
             if foundgroupname is not None:
-                res = obj.exportgroup_remove_volumes(foundgroupname, project, tenant, volumename, False)    # no snapshot (snapshot = False)
+                res = obj.exportgroup_remove_volumes(foundgroupname, self.project, self.tenant, volumename, False)    # no snapshot (snapshot = False)
         except SOSError as e:
-            raise SOSError(SOSError.SOS_FAILURE_ERR, "Export Group " + foundgroupname + ": Create failed: " + e.err_text)
+            raise SOSError(SOSError.SOS_FAILURE_ERR, "Removing volume " + volumename + " from export Group " + foundgroupname + " failed: " + e.err_text)
+
 
     def find_device_number(self, volume):
         try:
@@ -465,7 +435,8 @@ class EMCViPRDriverCommon():
 
         return device_info
 
-    def get_vpool(self, volume):
+
+    def _get_vpool(self, volume):
         vpool = {}
         ctxt = context.get_admin_context()
         type_id = volume['volume_type_id']
@@ -476,6 +447,60 @@ class EMCViPRDriverCommon():
                 vpool[key] = value
 
         return vpool
+
+
+    '''
+    Find the export group to which the given initiator port belong, if exists.
+    Question: can an initiator be part of two groups?
+    '''
+    def _find_exportgroup(self, exportgroup_obj, initiator_port):
+        foundgroupname = None
+        grouplist = exportgroup_obj.exportgroup_list(self.project, self.tenant)
+        for groupid in grouplist:
+            groupdetails = exportgroup_obj.exportgroup_show(groupid, self.project, self.tenant)
+            initiators = groupdetails['initiators']
+            for initiator in initiators:
+                if (initiator['initiator_port'] == initiator_port):
+                    foundgroupname = groupdetails['name']
+                    break
+
+            if foundgroupname is not None:
+                break
+
+        return foundgroupname
+
+    
+    '''
+    Find the host, if exists, to which the given initiator belong.
+    '''
+    def _find_host(self, host_name, initiator_port):
+        foundhostname = None
+        host_obj = Host(self.fqdn, self.port)
+        hosts = host_obj.host_list(self.tenant)
+        for host in hosts:
+            initiators = host_obj.host_query_initiators(host['id'])
+            for initiator in initiators:
+                if (initiator_port == initiator['name']):
+                    foundhostname = host['name']
+                    break
+
+            if foundhostname is not None:
+                break
+
+        return foundhostname
+
+    '''
+    Check if a Host object with the given hostname already exists in ViPR
+    '''
+    def _host_exists(self, host_name):
+        host_obj = Host(self.fqdn, self.port)
+        hosts = host_obj.host_list(self.tenant)
+        for host in hosts:
+            if (host_name == host['name']):
+                return True
+
+        return False
+
 
     def update_volume_stats(self):
         """Retrieve stats info."""
@@ -519,3 +544,4 @@ class EMCViPRDriverCommon():
 
         except SOSError as e:
             raise e
+

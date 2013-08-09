@@ -113,7 +113,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             }
 
         """
-        initiatorNode = connector['initiator']
+        initiatorNode = None
         initiatorPort = connector['initiator']
         protocol = 'iSCSI'
         hostname = connector['host'] # socket.gethostname()        
