@@ -314,9 +314,6 @@ class EMCViPRDriverCommon():
             obj = ExportGroup(self.fqdn, self.port)
             foundgroupname = self._find_exportgroup(obj, initiatorPort)
             if (foundgroupname is None):
-                foundgroupname = hostname + 'SG'
-                # create a unique name
-                foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
                 # check if this initiator is contained in any ViPR Host object
                 foundhostname= self._find_host(initiatorPort)
                 if (foundhostname is None):
@@ -334,6 +331,10 @@ class EMCViPRDriverCommon():
                             " containing initiator " + initiatorPort +
                             "; add this host to the export group.")
 
+                # create an export group for this host
+                foundgroupname = hostname + 'SG'
+                # create a unique name
+                foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
                 res = obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray, 'Host', foundhostname);
 
             res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
@@ -344,8 +345,9 @@ class EMCViPRDriverCommon():
                 device_info = self.find_device_number(volume)
                 try:
                     device_number = device_info['hostlunid']
-                except KeyError as e:
+                except KeyError:
                     device_number = None
+
                 if (device_number is None or device_number == '-1'):
                     time.sleep(10)
 
