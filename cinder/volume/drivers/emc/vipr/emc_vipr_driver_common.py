@@ -49,7 +49,7 @@ class EMCViPRDriverCommon():
   
     stats = {'driver_version': '1.0',
              'free_capacity_gb': 'unknown',
-             'reserved_percentage': 'unknown',
+             'reserved_percentage': '0',
              'storage_protocol': 'iSCSI',
              'total_capacity_gb': 'unknown',
              'vendor_name': 'EMC',
