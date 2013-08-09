@@ -23,7 +23,7 @@ class Snapshot(object):
     URI_SNAPSHOTS                = '/{0}/snapshots/{1}'
     URI_BLOCK_SNAPSHOTS          = '/block/snapshots/{0}'
     URI_FILE_SNAPSHOTS           = '/file/snapshots/{0}'
-    URI_SNAPSHOT_LIST            = '/{0}/{1}/{2}/snapshots'        
+    URI_SNAPSHOT_LIST            = '/{0}/{1}/{2}/protection/snapshots'        
     URI_SNAPSHOT_EXPORTS         = '/{0}/snapshots/{1}/exports'
     URI_SNAPSHOT_UNEXPORTS_FILE  = URI_SNAPSHOT_EXPORTS + '/{2},{3},{4},{5}'
     URI_SNAPSHOT_VOLUME_EXPORT   = '/{0}/snapshots/{1}/exports'
