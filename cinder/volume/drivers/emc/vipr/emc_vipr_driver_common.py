@@ -148,7 +148,6 @@ class EMCViPRDriverCommon():
     def authenticate_user(self):
         # we should check to see if we are already authenticated before blindly doing it again
         if (self.AUTHENTICATED == False ):
-            import pdb; pdb.set_trace()
             LOG.debug("Authenticating user")
             obj = Authentication(self.fqdn, self.port)
             cookiedir = os.getcwd()
@@ -321,7 +320,7 @@ class EMCViPRDriverCommon():
                 # check if this initiator is contained in any ViPR Host object
                 foundhostname= self._find_host(initiatorPort)
                 if (foundhostname is None):
-                    if (not _host_exists(hostname)):
+                    if (not self._host_exists(hostname)):
                         # create a host so it can be added to the export group
                         host_obj = Host(self.fqdn, self.port)
                         host_obj.host_create(hostname, self.project, self.tenant, socket.getfqdn())
@@ -479,7 +478,7 @@ class EMCViPRDriverCommon():
     '''
     Find the host, if exists, to which the given initiator belong.
     '''
-    def _find_host(self, host_name, initiator_port):
+    def _find_host(self, initiator_port):
         foundhostname = None
         host_obj = Host(self.fqdn, self.port)
         hosts = host_obj.host_list(self.tenant)
