@@ -269,15 +269,19 @@ class EMCViPRDriverCommon():
     def create_snapshot(self, snapshot):
         self.authenticate_user()
         obj = Snapshot(self.fqdn, self.port)
-        try:  
+        try:    
             snapshotname = snapshot['name']
             volumename = snapshot['volume_name']
-            resourcepath = self.tenant + "/" + self.project + "/"
+            projectname = self.project
+            tenantname = self.tenant
             storageresType = 'block'
             storageresTypename = 'volumes'
             filesystem = None
-            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, resourcepath)
-            obj.snapshot_create(storageresType, storageresTypename, resourceUri, snapshotname)
+            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, projectname, tenantname)
+            inactive = False
+            rptype = None
+            sync = True
+            obj.snapshot_create(storageresType, storageresTypename, resourceUri, snapshotname, inactive, rptype, sync)
             return
 
         except SOSError as e:
@@ -292,13 +296,14 @@ class EMCViPRDriverCommon():
         try:
             snapshotname = snapshot['name']
             volumename = snapshot['volume_name']
-
+            projectname = self.project
+            tenantname = self.tenant
             storageresType = 'block'
             storageresTypename = 'volumes'
             filesystem = None
-            resourcepath = self.tenant + "/" + self.project + "/"
-            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, resourcepath)
-            obj.snapshot_delete(storageresType, storageresTypename, resourceUri, snapshotname)
+            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, projectname, tenantname)
+            sync = True
+            obj.snapshot_delete(storageresType, storageresTypename, resourceUri, snapshotname, sync)
             return
         except SOSError as e:
             if (e.err_code == SOSError.SOS_FAILURE_ERR):
@@ -551,4 +556,3 @@ class EMCViPRDriverCommon():
 
         except SOSError as e:
             raise e
-

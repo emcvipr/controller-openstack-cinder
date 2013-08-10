@@ -59,7 +59,7 @@ class Snapshot(object):
         self.__port = port
         
     
-    def snapshot_create(self, otype, typename, ouri, snaplabel, activate, rptype, sync):
+    def snapshot_create(self, otype, typename, ouri, snaplabel, inactive, rptype, sync):
         '''new snapshot is created, for a given shares or volumes
             parameters:
                 otype      : either file or block or object type should be provided
@@ -86,7 +86,8 @@ class Snapshot(object):
         if(otype == Snapshot.BLOCK):
             parms = {
                 'name'  : snaplabel,
-                'create_inactive' : activate
+                'create_inactive' : inactive, # if true, the snapshot will not activate the synchronization between source and target volumes
+                'type' : rptype                
             }
             body = json.dumps( parms ) 
             
