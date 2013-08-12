@@ -32,6 +32,7 @@ class ExportGroup(object):
     The class definition for operations on 'Export group Service'. 
     '''
     URI_EXPORT_GROUP = "/block/exports"
+    URI_EXPORT_GROUP_ID = URI_EXPORT_GROUP + "/{0}"
     URI_EXPORT_GROUPS = URI_EXPORT_GROUP + "/?project={0}"
     URI_EXPORT_GROUPS_SHOW = URI_EXPORT_GROUP + "/{0}"
     URI_EXPORT_GROUPS_INITIATOR = URI_EXPORT_GROUP + "/{0}/initiators"
@@ -284,14 +285,16 @@ class ExportGroup(object):
             volparms['lun'] = lun
   
         parms = {
-            'volume' : [volparms]
+            'volume_changes' : {     
+                'add' : [volparms]
+            }
         }
                                 
         token = "cli_export_group_add_volume:" + fullvolname
         body = json.dumps(parms)
         uri = self.exportgroup_query(name, project, tenant)
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
-                        "POST", self.URI_EXPORT_GROUPS_VOLUME.format(uri), 
+                        "PUT", self.URI_EXPORT_GROUP_ID.format(uri), 
                         body, token)
         o = common.json_decode(s)
         return o
@@ -308,11 +311,19 @@ class ExportGroup(object):
             snapuri =   snapshotobj.snapshot_query('block', 'volumes', volumeURI, snapshot)
             volumeURI = snapuri 
         
+        #construct update body
+        parms = {
+            'volume_changes' : {
+                'remove' : [volumeURI]
+            }
+        }
+                
+        body = json.dumps(parms)
         token = "cli_export_group_remove_volume:" + fullvolname
         uri = self.exportgroup_query(name, project, tenant)
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
-                 "DELETE", self.URI_EXPORT_GROUPS_VOLUME_INSTANCE.format(uri, volumeURI), 
-                 None, token)
+                 "PUT", self.URI_EXPORT_GROUP_ID.format(uri), 
+                 body, token)
         o = common.json_decode(s)
         return o
               
