@@ -42,11 +42,36 @@ CINDER_EMC_CONFIG_FILE = '/etc/cinder/cinder_emc_config.xml'
 URI_VPOOL_VARRAY_CAPACITY = '/block/vpools/{0}/varrays/{1}/capacity'
 
 
+def retry_wrapper(func):
+    def try_and_retry(*args, **kwargs):
+        global AUTHENTICATED
+        retry = False
+        
+        try:
+            return func(*args, **kwargs)
+        except SOSError as e:
+            # if we got an http error and
+            # the string contains 401 or if the string contains the word cookie
+            if (e.err_code == SOSError.HTTP_ERR and (e.err_text.find('401') != -1 or e.err_text.lower().find('cookie') != -1)):
+                retry=True
+                AUTHENTICATED=False
+            else:
+                raise e        
+        except Exception as o:
+            raise o
+    
+        if (retry):        
+            return func(*args, **kwargs)
+    
+    return try_and_retry
+
+
+AUTHENTICATED = False
+
 class EMCViPRDriverCommon():
     
     OPENSTACK_TAG = 'OpenStack'
-    AUTHENTICATED = False
-  
+
     stats = {'driver_version': '1.0',
              'free_capacity_gb': 'unknown',
              'reserved_percentage': '0',
@@ -145,15 +170,17 @@ class EMCViPRDriverCommon():
 
         return viprinfo
 
-    def authenticate_user(self):
+    def authenticate_user(self):       
+        global AUTHENTICATED
+        
         # we should check to see if we are already authenticated before blindly doing it again
-        if (self.AUTHENTICATED == False ):
-            LOG.debug("Authenticating user")
+        if (AUTHENTICATED == False ):
             obj = Authentication(self.fqdn, self.port)
             cookiedir = os.getcwd()
             obj.authenticate_user(self.user, self.password, cookiedir, None)
-            self.AUTHENTICATED = True
+            AUTHENTICATED = True
 
+    @retry_wrapper
     def create_volume(self, vol):
         self.authenticate_user()
         name = vol['name']
@@ -189,7 +216,7 @@ class EMCViPRDriverCommon():
             else:
                 raise e
                 
-
+    @retry_wrapper
     def setTags(self, vol):
         self.authenticate_user()
         name = vol['name']
@@ -231,6 +258,7 @@ class EMCViPRDriverCommon():
                 
         return obj.getTags(self.tenant + "/" + self.project + "/" + name)    
 
+    @retry_wrapper
     def delete_volume(self, vol):
         self.authenticate_user()
         name = vol['name']
@@ -244,6 +272,7 @@ class EMCViPRDriverCommon():
             else:
                 raise e
 
+    @retry_wrapper
     def list_volume(self):
         obj = Volume(self.fqdn, self.port)
         try:
@@ -266,6 +295,7 @@ class EMCViPRDriverCommon():
         except SOSError as e:
             raise e
 
+    @retry_wrapper
     def create_snapshot(self, snapshot):
         self.authenticate_user()
         obj = Snapshot(self.fqdn, self.port)
@@ -290,6 +320,7 @@ class EMCViPRDriverCommon():
             else:
                 raise e
 
+    @retry_wrapper
     def delete_snapshot(self, snapshot):
         self.authenticate_user()
         obj = Snapshot(self.fqdn, self.port)
@@ -310,7 +341,8 @@ class EMCViPRDriverCommon():
                 raise SOSError(SOSError.SOS_FAILURE_ERR, "Snapshot " + snapshotname + ": Delete Failed\n")
             else:
                 raise e
-
+            
+    @retry_wrapper
     def initialize_connection(self, volume, 
             protocol, initiatorNode, initiatorPort, hostname):
         try:
@@ -359,7 +391,7 @@ class EMCViPRDriverCommon():
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Attach volume (" + volume['name'] + ") to host (" + hostname + ") initiator (" + initiatorPort + ") failed: " + e.err_text)
 
-
+    @retry_wrapper
     def terminate_connection(self, volume, 
             protocol, initiatorNode, initiatorPort, hostname):
         try:
@@ -377,7 +409,7 @@ class EMCViPRDriverCommon():
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Removing volume " + volumename + " from export Group " + foundgroupname + " failed: " + e.err_text)
 
-
+    @retry_wrapper
     def find_device_number(self, volume):
         try:
             device_info = {} 
@@ -514,6 +546,7 @@ class EMCViPRDriverCommon():
         return False
 
 
+    @retry_wrapper
     def update_volume_stats(self):
         """Retrieve stats info."""
         LOG.debug(_("Updating volume stats"))
