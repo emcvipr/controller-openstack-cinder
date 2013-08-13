@@ -33,6 +33,8 @@ LOG = logging.getLogger(__name__)
 class EMCViPRISCSIDriver(driver.ISCSIDriver):
     """EMC ViPR iSCSI Driver"""
 
+    FAKING_HLU = True
+    
     def __init__(self, *args, **kwargs):
 
         super(EMCViPRISCSIDriver, self).__init__(*args, **kwargs)
@@ -223,6 +225,9 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
                      % {'name': volume['name']})
 
         properties['target_lun'] = device_number
+        if (EMCViPRISCSIDriver.FAKING_HLU):
+            properties['target_lun'] = 0
+            EMCViPRISCSIDriver.FAKING_HLU = False
 
         properties['volume_id'] = volume['id']
 
