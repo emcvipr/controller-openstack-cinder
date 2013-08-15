@@ -56,7 +56,7 @@ cinder_emc_config_file = /etc/cinder/cinder_emc_config.xml
 ```
 
 * Create the /etc/cinder/cinder_emc_config.xml, with the folowing content:
-```
+```xml
 <?xml version='1.0' encoding='UTF-8'?>
 <EMC>
   <ViPR>
