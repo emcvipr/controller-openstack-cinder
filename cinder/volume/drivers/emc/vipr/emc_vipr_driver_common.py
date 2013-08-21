@@ -182,8 +182,11 @@ class EMCViPRDriverCommon():
 
     @retry_wrapper
     def create_volume(self, vol):
+        
         self.authenticate_user()
-        name = vol['name']
+        
+        name = self._get_volume_name(vol)
+            
         size = int(vol['size']) * 1073741824
         obj = Volume(self.fqdn, self.port)
 
@@ -215,11 +218,12 @@ class EMCViPRDriverCommon():
                                name + ": Tag failed\n" + e.err_text)
             else:
                 raise e
-                
+                            
     @retry_wrapper
     def setTags(self, vol):
+    
         self.authenticate_user()
-        name = vol['name']
+        name = self._get_volume_name(vol)
         
         obj = Volume(self.fqdn, self.port)
         
@@ -262,8 +266,8 @@ class EMCViPRDriverCommon():
     def create_cloned_volume(self, vol, src_vref):
         """Creates a clone of the specified volume."""        
         self.authenticate_user()
-        name = vol['name']
-        srcname = src_vref['name']
+        name = self._get_volume_name(vol)
+        srcname = self._get_volume_name(src_vref)
         obj = Volume(self.fqdn, self.port)
         
         try:
@@ -287,7 +291,7 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def delete_volume(self, vol):
         self.authenticate_user()
-        name = vol['name']
+        name = self._get_volume_name(vol)
         obj = Volume(self.fqdn, self.port)
         try:
             obj.delete(self.tenant + "/" + self.project + "/" + name)
@@ -327,7 +331,8 @@ class EMCViPRDriverCommon():
         obj = Snapshot(self.fqdn, self.port)
         try:    
             snapshotname = snapshot['name']
-            volumename = snapshot['volume_name']
+            vol = snapshot['volume']
+            volumename = self._get_volume_name(vol)
             projectname = self.project
             tenantname = self.tenant
             storageresType = 'block'
@@ -352,7 +357,8 @@ class EMCViPRDriverCommon():
         obj = Snapshot(self.fqdn, self.port)
         try:
             snapshotname = snapshot['name']
-            volumename = snapshot['volume_name']
+            vol = snapshot['volume']
+            volumename = self._get_volume_name(vol)
             projectname = self.project
             tenantname = self.tenant
             storageresType = 'block'
@@ -373,7 +379,7 @@ class EMCViPRDriverCommon():
             protocol, initiatorNode, initiatorPort, hostname):
         try:
             self.authenticate_user()
-            volumename = volume['name']            
+            volumename = self._get_volume_name(volume)           
             obj = ExportGroup(self.fqdn, self.port)
             foundgroupname = self._find_exportgroup(obj, initiatorPort)
             if (foundgroupname is None):
@@ -415,14 +421,14 @@ class EMCViPRDriverCommon():
                     time.sleep(10)
 
         except SOSError as e:
-            raise SOSError(SOSError.SOS_FAILURE_ERR, "Attach volume (" + volume['name'] + ") to host (" + hostname + ") initiator (" + initiatorPort + ") failed: " + e.err_text)
+            raise SOSError(SOSError.SOS_FAILURE_ERR, "Attach volume (" + self._get_volume_name(volume) + ") to host (" + hostname + ") initiator (" + initiatorPort + ") failed: " + e.err_text)
 
     @retry_wrapper
     def terminate_connection(self, volume, 
             protocol, initiatorNode, initiatorPort, hostname):
         try:
             self.authenticate_user()
-            volumename = volume['name']
+            volumename = self._get_volume_name(volume)
             volobj = Volume(self.fqdn, self.port)
             tenantproject = self.tenant+ '/' + self.project
             voldetails = volobj.show(tenantproject + '/' + volumename)
@@ -439,7 +445,7 @@ class EMCViPRDriverCommon():
     def find_device_number(self, volume):
         try:
             device_info = {} 
-            volumename = volume['name']
+            volumename = self._get_volume_name(volume)
             obj = ExportGroup(self.fqdn, self.port)
             vol_obj = Volume(self.fqdn, self.port)
 
@@ -506,6 +512,17 @@ class EMCViPRDriverCommon():
         return device_info
 
 
+    def _get_volume_name(self, vol):
+        try:
+            name = vol['display_name']
+        except:
+            name = None
+             
+        if ( name is None or len(name) == 0):
+            name = vol['name']
+            
+        return name
+    
     def _get_vpool(self, volume):
         vpool = {}
         ctxt = context.get_admin_context()
