@@ -40,7 +40,7 @@ class Volume(object):
     URI_TASK_LIST = URI_VOLUME + '/tasks'
     URI_TASK = URI_TASK_LIST + '/{1}'
 
-    # Protection REST APIs 
+    # Protection REST APIs
     URI_VOLUME_PROTECTION_CREATE	 =   '/block/volumes/{0}/protection/continuous' 
     URI_VOLUME_PROTECTION_START		 =   '/block/volumes/{0}/protection/continuous/start'
     URI_VOLUME_PROTECTION_STOP		 =   '/block/volumes/{0}/protection/continuous/stop'
@@ -60,7 +60,9 @@ class Volume(object):
     URI_VOLUME_PROTECTIONSET_RESOURCES	       = '/block/protection-sets/{0}/resources'
     URI_VOLUME_PROTECTIONSET_DISCOVER	       = '/block/protection-sets/{0}/discover'
  
-   
+    #Protection REST APIs - clone  
+    URI_VOLUME_PROTECTION_FULLCOPIES =   '/block/volumes/{0}/protection/full-copies'     
+       
     isTimeout = False
     timeout = 300
     
@@ -583,6 +585,100 @@ class Volume(object):
         else:
             return o
 
+
+    # Creates volume(s) from given source volume
+    def clone(self, project, label, number_of_volumes, srcname, sync):
+        '''
+        Makes REST API call to clone volume
+        Parameters:
+            project: name of the project under which the volume will be created
+            label: name of volume
+            number_of_volumes: count of volumes
+            srcname: name of the source volume
+            sync: synchronous request
+        Returns:
+            Created task details in JSON response payload
+        '''
+        name = project + '/' + label        
+        from project import Project
+        proj_obj = Project(self.__ipAddr, self.__port)
+        project_uri  = proj_obj.project_query(project)
+        volume_url = None
+                
+        try:
+            self.__find_volumes(project_uri, name, label, number_of_volumes)
+            volume_uri = self.volume_query(project + '/' + srcname)       
+        except SOSError as e:
+            raise e                
+                
+        request = {
+             'name' : label,
+             'type' : None,
+             'count' : 1
+            }
+
+        if(number_of_volumes and number_of_volumes > 1):
+            request["count"] = number_of_volumes          
+             
+        body = json.dumps(request)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Volume.URI_VOLUME_PROTECTION_FULLCOPIES.format(volume_uri),
+                                             body)
+        o = common.json_decode(s)
+        if(sync):
+            if(number_of_volumes < 2):
+                task = o["task"][0]
+                return self.block_until_complete(task["resource"]["id"], 
+                                             task["op_id"])
+        else:
+            return o
+
+    # check volume(s)
+    def __find_volumes(self, project_uri, name, label, number_of_volumes):       
+        if(number_of_volumes and number_of_volumes > 1):
+            for vol_id in self.get_volume_ids(project_uri, label, number_of_volumes):
+                volume = self.show_by_uri(vol_id, True)
+                if(volume):
+                    if(volume["inactive"]):
+                        pass
+                    elif(volume["inactive"] == False):
+                        raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
+                               "Volume with name: " + volume["name"] + 
+                               " already exists")
+                    else:
+                        tasks = self.show_task_by_uri(vol_id)
+                        for task in tasks:
+                            if(task['state'] in ["pending", "ready"]):
+                                raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
+                                               "Volume with name: " + task["resource"]["name"] + 
+                                               " already exists. Associated task[" + task["op_id"] 
+                                               + "] is in " + task['state'] +" state")
+                            
+        else:
+            try:
+                volume = self.show(name, True)
+                if(volume):
+                    if(volume["inactive"]):
+                        pass
+                    elif(volume["inactive"] == False):
+                        raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
+                               "Volume with name: " + volume["name"] + 
+                               " already exists")
+                    else:
+                        tasks = self.show_task_by_uri(volume["id"])
+                        for task in tasks:
+                            if(task['state'] in ["pending", "ready"]):
+                                raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
+                                       "Volume with name: " + task["resource"]["name"] + 
+                                       " already exists. Associated task[" + task["op_id"] 
+                                       + "] is in " + task['state'] +" state")
+            except SOSError as e:
+                if(e.err_code==SOSError.NOT_FOUND_ERR):
+                    pass
+                else:
+                    raise e  
+                
     # Update a volume information
     def update(self, name, label, vpool):
         '''

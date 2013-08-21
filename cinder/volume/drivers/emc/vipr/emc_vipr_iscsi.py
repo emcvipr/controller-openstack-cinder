@@ -50,6 +50,11 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         self.common.create_volume(volume)
         self.common.setTags(volume)
 
+    def create_cloned_volume(self, volume, src_vref):
+        """Creates a cloned Volume."""
+        self.common.create_cloned_volume(volume, src_vref)
+        self.common.setTags(volume)                
+        
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
         #self.common.create_volume_from_snapshot(volume, snapshot)

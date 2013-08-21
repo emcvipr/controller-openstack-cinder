@@ -259,6 +259,32 @@ class EMCViPRDriverCommon():
         return obj.getTags(self.tenant + "/" + self.project + "/" + name)    
 
     @retry_wrapper
+    def create_cloned_volume(self, vol, src_vref):
+        """Creates a clone of the specified volume."""        
+        self.authenticate_user()
+        name = vol['name']
+        srcname = src_vref['name']
+        obj = Volume(self.fqdn, self.port)
+        
+        try:
+            sync = True
+            count = 1
+            res = obj.clone(self.tenant + "/" + self.project,
+                             name,
+                             count,
+                             srcname,
+                             sync                             
+                             )
+            if(sync == False):
+                return vipr_utils.format_json_object(res)
+        except SOSError as e:
+            if(e.err_code == SOSError.SOS_FAILURE_ERR):
+                raise SOSError(SOSError.SOS_FAILURE_ERR, "Volume " +
+                               name + ": clone failed\n" + e.err_text)
+            else:
+                raise e
+                
+    @retry_wrapper
     def delete_volume(self, vol):
         self.authenticate_user()
         name = vol['name']
