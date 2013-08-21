@@ -517,12 +517,18 @@ def getenv(envvarname, envdefaultvalue=None):
     try:
         if (envvarname is None):
             return None
+        
+        # short circuit this, check for the existence of the openstack cinder config file
+        # and read it if found
+        _get_vipr_info('/etc/cinder/cinder_emc_config.xml')
+        
         soscli_dir_path = os.path.dirname(os.path.dirname(
                                 os.path.abspath(sys.argv[0])))
         if sys.platform.startswith('win'):
             soscli_abs_path = os.path.join(soscli_dir_path, 'viprcli.profile.bat')
         else:
             soscli_abs_path = os.path.join(soscli_dir_path, 'viprcli.profile')
+        
         sosenv = os.getenv(envvarname)
         if (sosenv is None):
             # read the value from viprcli.profile
@@ -572,6 +578,32 @@ def getenv(envvarname, envdefaultvalue=None):
             if (sosenv is None):
                 sosenv=soscli_dir_path
     return sosenv
+
+
+def _get_vipr_info(filename):
+    if filename == None:
+        return 
+    
+    file = open(filename, 'r')
+    if file:
+        data = file.read()
+        file.close()
+        dom = parseString(data)
+        fqdns = dom.getElementsByTagName('ViPRFQDN')
+        if fqdns is not None and len(fqdns) > 0:
+            # put the FQDN into the environment as VIPR_HOSTNAME
+            fqdn = fqdns[0].toxml().replace('<ViPRFQDN>', '')
+            fqdn = fqdn.replace('</ViPRFQDN>', '')
+            os.environ['VIPR_HOSTNAME']=fqdn
+        ports = dom.getElementsByTagName('ViPRPort')
+        if ports is not None and len(ports) > 0:
+            # put the Port into the environment as VIPR_PORT
+            port = ports[0].toxml().replace('<ViPRPort>', '')
+            port = port.replace('</ViPRPort>', '')
+            os.environ['VIPR_PORT']=port
+                            
+
+    return
 
 #This method defines the standard and consistent error message format
 #for all CLI error messages. 
