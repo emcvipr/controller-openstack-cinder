@@ -34,6 +34,9 @@ from cli.snapshot import Snapshot
 from cli.volume import Volume
 from cli.host import Host
 
+# for the delegator
+import sys,os,traceback
+
 LOG = logging.getLogger(__name__)
 
 CONF = cfg.CONF
@@ -55,8 +58,9 @@ def retry_wrapper(func):
             if (e.err_code == SOSError.HTTP_ERR and (e.err_text.find('401') != -1 or e.err_text.lower().find('cookie') != -1)):
                 retry=True
                 AUTHENTICATED=False
-            else:
-                raise e        
+            else:               
+                exception_message = "\nViPR Exception: %s\nStack Trace:\n%s" % (e.err_text,traceback.format_exc())
+                raise exception.VolumeBackendAPIException(data=exception_message)               
         except Exception as o:
             raise o
     
@@ -182,7 +186,7 @@ class EMCViPRDriverCommon():
 
     @retry_wrapper
     def create_volume(self, vol):
-        
+    
         self.authenticate_user()
         
         name = self._get_volume_name(vol)
@@ -641,3 +645,4 @@ class EMCViPRDriverCommon():
 
         except SOSError as e:
             raise e
+
