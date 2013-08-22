@@ -41,7 +41,6 @@ class ExportGroup(object):
     URI_EXPORT_GROUPS_VOLUME = URI_EXPORT_GROUP + "/{0}/volumes"
     URI_EXPORT_GROUPS_VOLUME_INSTANCE = URI_EXPORT_GROUP + "/{0}/volumes/{1}"
     URI_EXPORT_GROUPS_STORAGEPORTS = URI_EXPORT_GROUP + "/{0}/storage-ports"  
-    URI_EXPORT_GROUP_LIST = '/projects/{0}/resources'
     URI_EXPORT_GROUP_SEARCH = '/block/exports/search'
     URI_EXPORT_GROUP_DEACTIVATE = URI_EXPORT_GROUPS_SHOW +  '/deactivate' 
     

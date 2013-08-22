@@ -520,7 +520,7 @@ def getenv(envvarname, envdefaultvalue=None):
         
         # short circuit this, check for the existence of the openstack cinder config file
         # and read it if found
-        _get_vipr_info('/etc/cinder/cinder_emc_config.xml')
+        _get_vipr_info('/etc/cinder/cinder_emc_vipr_config.xml')
         
         soscli_dir_path = os.path.dirname(os.path.dirname(
                                 os.path.abspath(sys.argv[0])))

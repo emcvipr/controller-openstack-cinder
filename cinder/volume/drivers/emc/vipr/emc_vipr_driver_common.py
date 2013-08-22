@@ -38,7 +38,7 @@ LOG = logging.getLogger(__name__)
 
 CONF = cfg.CONF
 
-CINDER_EMC_CONFIG_FILE = '/etc/cinder/cinder_emc_config.xml'
+CINDER_EMC_VIPR_CONFIG_FILE = '/etc/cinder/cinder_emc_vipr_config.xml'
 URI_VPOOL_VARRAY_CAPACITY = '/block/vpools/{0}/varrays/{1}/capacity'
 
 
@@ -81,8 +81,8 @@ class EMCViPRDriverCommon():
              'volume_backend_name': 'EMCViPRISCSIDriver'}
              
     def __init__(self, prtcl, configuration=None):
-        opt = cfg.StrOpt('cinder_emc_config_file',
-                         default=CINDER_EMC_CONFIG_FILE,
+        opt = cfg.StrOpt('cinder_emc_vipr_config_file',
+                         default=CINDER_EMC_VIPR_CONFIG_FILE,
                          help='use this file for cinder emc plugin '
                          'config data')
         CONF.register_opt(opt)
@@ -96,7 +96,7 @@ class EMCViPRDriverCommon():
 
     def _get_vipr_info(self, filename=None):
         if filename == None:
-            filename = filename = self.configuration.cinder_emc_config_file 
+            filename = filename = self.configuration.cinder_emc_vipr_config_file 
 
         file = open(filename, 'r')
         data = file.read()
@@ -381,7 +381,7 @@ class EMCViPRDriverCommon():
             self.authenticate_user()
             volumename = self._get_volume_name(volume)           
             obj = ExportGroup(self.fqdn, self.port)
-            foundgroupname = self._find_exportgroup(obj, initiatorPort)
+            (foundgroupname, hasVolumes) = self._find_exportgroup(obj, initiatorPort)
             if (foundgroupname is None):
                 # check if this initiator is contained in any ViPR Host object
                 foundhostname= self._find_host(initiatorPort)
@@ -405,8 +405,13 @@ class EMCViPRDriverCommon():
                 # create a unique name
                 foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
                 res = obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray, 'Host', foundhostname);
+                
+            # Workaround for the hlu reporting issue in ViPR for the first volume in the storage group
+            hlu = None
+            if (hasVolumes is False):
+                hlu = '0';
 
-            res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, None, None)
+            res = obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, hlu, None)
 
             # Wait for LUN to be really attached
             device_number = None
@@ -435,7 +440,7 @@ class EMCViPRDriverCommon():
             volid = voldetails['id']
 
             obj = ExportGroup(self.fqdn, self.port)
-            foundgroupname = self._find_exportgroup(obj, initiatorPort)
+            (foundgroupname, hasVolumes) = self._find_exportgroup(obj, initiatorPort)
             if foundgroupname is not None:
                 res = obj.exportgroup_remove_volumes(foundgroupname, self.project, self.tenant, volumename, False)    # no snapshot (snapshot = False)
         except SOSError as e:
@@ -536,12 +541,14 @@ class EMCViPRDriverCommon():
         return vpool
 
 
-    '''
-    Find the export group to which the given initiator port belong, if exists.
-    Question: can an initiator be part of two groups?
-    '''
     def _find_exportgroup(self, exportgroup_obj, initiator_port):
+        '''
+        Find the export group to which the given initiator port belong, if exists.
+        If found, also return if it has volumes attached
+        Question: can an initiator be part of two groups?
+        '''
         foundgroupname = None
+        hasVolumes = False
         grouplist = exportgroup_obj.exportgroup_list(self.project, self.tenant)
         for groupid in grouplist:
             groupdetails = exportgroup_obj.exportgroup_show(groupid, self.project, self.tenant)
@@ -552,15 +559,17 @@ class EMCViPRDriverCommon():
                     break
 
             if foundgroupname is not None:
+                if (groupdetails['volumes'] and len(groupdetails['volumes']) > 0):
+                    hasVolumes = True
                 break
 
-        return foundgroupname
+        return (foundgroupname, hasVolumes)
 
     
-    '''
-    Find the host, if exists, to which the given initiator belong.
-    '''
     def _find_host(self, initiator_port):
+        '''
+        Find the host, if exists, to which the given initiator belong.
+        '''
         foundhostname = None
         host_obj = Host(self.fqdn, self.port)
         hosts = host_obj.host_list(self.tenant)
@@ -576,10 +585,10 @@ class EMCViPRDriverCommon():
 
         return foundhostname
 
-    '''
-    Check if a Host object with the given hostname already exists in ViPR
-    '''
     def _host_exists(self, host_name):
+        '''
+        Check if a Host object with the given hostname already exists in ViPR
+        '''
         host_obj = Host(self.fqdn, self.port)
         hosts = host_obj.host_list(self.tenant)
         for host in hosts:
