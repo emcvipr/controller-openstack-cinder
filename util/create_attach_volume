@@ -68,7 +68,14 @@ if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    # detach the volume
    echo "*** detaching the volume"
    nova volume-detach ${INSTANCE} ${VOLUME}
-
+   # and wait for it to become available
+   echo "Waiting for volume '${VOLNAME}' to be created"
+   STATUS="unknown"
+   while [ "${STATUS}" != "available" ]; do
+      sleep 5
+      STATUS=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f4 -d' ')
+   done
+   
    # and the instance
    echo "*** deleting the instance"
    nova delete $INSTANCE
