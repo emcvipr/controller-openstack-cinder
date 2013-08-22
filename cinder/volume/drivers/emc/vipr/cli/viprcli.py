@@ -45,6 +45,7 @@ import protectionsystem
 import consistencygroup
 import host
 import cluster
+import openstack
 
 import warnings
 
@@ -131,6 +132,7 @@ networksystem.networksystem_parser(module_parsers, common_parser)
 network.network_parser(module_parsers, common_parser)
 host.host_parser(module_parsers, common_parser)
 cluster.cluster_parser(module_parsers, common_parser)
+openstack.openstack_parser(module_parsers, common_parser)
 
 # Parse Command line Arguments and execute the corresponding routines
 try:
