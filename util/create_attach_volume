@@ -11,7 +11,7 @@ VOLUMETYPE="ViPR High Performance"
 VOLNAME="openstack-iscsi-${DATE}"
 INSTNAME="instance-${DATE}"
 #get the nova image id
-IMAGE=$( nova image-list | grep "cirros-0.3.1-x86_64-uec " | cut -f2 -d' ')
+IMAGE=$( nova image-list | grep "cirros-0.3.1-x86_64-uec " | tr -s ' '| cut -f2 -d' ')
 
 # Create the volume
 cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMETYPE}" 1
@@ -21,13 +21,13 @@ echo "Waiting for volume '${VOLNAME}' to be created"
 STATUS="unknown"
 while [ "${STATUS}" != "available" ]; do
    sleep 5
-   STATUS=$( cinder list | grep "${VOLNAME}" | cut -f4 -d' ')
+   STATUS=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f4 -d' ')
 done
 
 echo "*** volume is now available"
 
 #get the volume id
-VOLUME=$( cinder list | grep "${VOLNAME}" | cut -f2 -d' ')
+VOLUME=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f2 -d' ')
 
 read -p "do you want to create an instance and attach a the volume to it? [N/y] " ATTACH
 if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
@@ -40,13 +40,13 @@ if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    STATUS="unknown"
    while [ "${STATUS}" != "ACTIVE" ]; do
       sleep 5
-      STATUS=$( nova list | grep "${INSTNAME}" | cut -f6 -d' ')
+      STATUS=$( nova list | grep "${INSTNAME}" | tr -s ' ' | cut -f6 -d' ')
    done
 
    echo "*** instance is now available"
 
    #get the instance id
-   INSTANCE=$( nova list | grep "${INSTNAME}" | cut -f2 -d' ')
+   INSTANCE=$( nova list | grep "${INSTNAME}" | tr -s ' '  | cut -f2 -d' ')
 
    # ok, now attach the volume
    nova volume-attach ${INSTANCE} ${VOLUME} ${MNT}
@@ -57,7 +57,7 @@ if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    STATUS="unknown"
    while [ "${STATUS}" != "in-use" ]; do
       sleep 5
-      STATUS=$( cinder list | grep "${VOLNAME}" | cut -f4 -d' ')
+      STATUS=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f4 -d' ')
    done
 fi
 
