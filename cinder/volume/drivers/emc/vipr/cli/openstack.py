@@ -47,10 +47,6 @@ class Openstack(object):
         self.__port = port
         self.__host = Host(self.__ipAddr, self.__port)
         self.__network = Network(self.__ipAddr, self.__port)
-  
-    def _fake_execute(self, _command, *_args, **_kwargs):
-        """Fake _execute."""
-        return self.__output, None
         
     def get_hostname(self, hostname = None):
         if (not hostname):
@@ -84,7 +80,7 @@ class Openstack(object):
             
                 # host not found, create a new one.
             task_rep = self.__host.host_create(hostname, None, None, hostname, ostype, None)
-            host = common.show_by_href(self.__ipAddr, self.__port, task_rep['resource'])  
+            host = common.show_by_href(self.__ipAddr, self.__port, task_rep['resource']) 
         return host                
     
     '''
@@ -112,7 +108,9 @@ class Openstack(object):
                                              body)
         o = common.json_decode(s)
         for host in o['host']:
-            if (hostname in host['host_name'] or host['host_name'] in hostname):
+            if (host['inactive']):
+                continue
+            if (hostname in host['host_name'] or host['host_name'] in hostname ):     
                 return host
                
     def get_localhost_initiator(self, protocol='iSCSI'):
