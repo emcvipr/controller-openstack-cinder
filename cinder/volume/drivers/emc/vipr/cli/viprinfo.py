@@ -1,3 +1,5 @@
+
+
 #!/usr/bin/python
 
 # Copyright (c) 2012-13 EMC Corporation
@@ -9,7 +11,7 @@
 # limited to the terms and conditions of the License Agreement under which
 # it is provided by or on behalf of EMC.
 
-import xml.dom.minidom
+import ConfigParser
 
 '''
     Get EMC ViPR configuration parameters
@@ -18,52 +20,28 @@ def _get_vipr_info(filename):
     if filename == None:
         return
 
-    configfile = open(filename, 'r')
-    if (configfile):
-        line = configfile.readline()
-        while line :
-            if (line[0] == '#'):
-                line = configfile.readline()
-                continue
-            if line.startswith('vipr_hostname'):
-                (word,fqdn) = line.rsplit('=',1)
-                fqdn = fqdn.rstrip()
-                fqdn = fqdn.lstrip()
-            if line.startswith('vipr_port'):
-                (word,port) = line.rsplit('=',1)
-                port = port.rstrip()
-                port = port.lstrip()
-            if line.startswith('vipr_tenant'):
-                (word,tenant) = line.rsplit('=',1)
-                tenant = tenant.rstrip()
-                tenant = tenant.lstrip()                
-            if line.startswith('vipr_project'):
-                (word,project) = line.rsplit('=',1)
-                project = project.rstrip()
-                project = project.lstrip()
-            if line.startswith('vipr_varray'):
-                (word,varray) = line.rsplit('=',1)
-                varray = varray.rstrip()
-                varray = varray.lstrip()
-                
-            if line.startswith('vipr_username'):
-                (word,username) = line.rsplit('=',1)
-                username = username.rstrip()
-                username = username.lstrip()                 
-            if line.startswith('vipr_password'):
-                (word,password) = line.rsplit('=',1)
-                password = password.rstrip()
-                password = password.lstrip()                       
-                
-                             
-            line = configfile.readline()   
+    config = ConfigParser.SafeConfigParser({'vipr_hostname' : 'localhost',
+                                            'vipr_port' : '4443'})
+    config.read(filename)
 
-
-
+    # username
+    username = config.get('DEFAULT', 'vipr_username')
+    # password
+    password = config.get('DEFAULT', 'vipr_password')
+    # hostname
+    fqdn = config.get('DEFAULT', 'vipr_hostname')
+    # port
+    port = config.get('DEFAULT', 'vipr_port')
+    # tenant
+    tenant = config.get('DEFAULT', 'vipr_tenant')
+    # project
+    project = config.get('DEFAULT', 'vipr_project')
+    # varray
+    varray = config.get('DEFAULT', 'vipr_varray')
 
     viprinfo = {'FQDN': str(fqdn),
                 'port': str(port),
-                'username': str(user),
+                'username': str(username),
                 'password': str(password),
                 'tenant': str(tenant),
                 'project': str(project),
@@ -71,5 +49,5 @@ def _get_vipr_info(filename):
 
     return viprinfo
     
-#viprinfo = _get_vipr_info( '/etc/cinder/cinder_emc_config.xml')
-#print(viprinfo) 
+# viprinfo = _get_vipr_info( '/etc/cinder/cinder.conf')
+# print(viprinfo) 
