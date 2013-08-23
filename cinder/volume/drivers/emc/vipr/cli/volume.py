@@ -782,6 +782,22 @@ class Volume(object):
 
 
 
+    # Gets the exports info given a volume uri
+    def get_exports_by_uri(self, uri):
+        '''
+        Makes REST API call to get exports info of a volume
+        Parameters:
+            uri: URI of the volume
+        Returns:
+            Exports details in JSON response payload
+        '''
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "GET", 
+                                             Volume.URI_VOLUME_EXPORTS.format(uri),
+                                             None)
+        return common.json_decode(s)
+
+
     # Exports a volume to a host given a volume name, initiator and hlu
     def export(self, name, protocol, initiator_port, initiator_node, hlu, host_id, sync):
         '''
