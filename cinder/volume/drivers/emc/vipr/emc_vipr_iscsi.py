@@ -21,7 +21,7 @@ from oslo.config import cfg
 
 
 from cinder import exception
-# ERIC: we get an error imprting flags
+# ERIC: we get an error importing flags
 # from cinder import flags
 from cinder.openstack.common import log as logging
 from cinder import utils
@@ -104,7 +104,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         pass
 
     def create_volume(self, volume):
-        """Creates a EMC Volume. """
+        """Creates a Volume. """
         self.common.create_volume(volume)
         self.common.setTags(volume)
 
@@ -182,10 +182,10 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         initiatorPort = connector['initiator']
         protocol = 'iSCSI'
         hostname = connector['host'] # socket.gethostname()        
-        self.common.initialize_connection(volume,
+        device_info = self.common.initialize_connection(volume,
             protocol, initiatorNode, initiatorPort, hostname)
 
-        iscsi_properties = self._get_iscsi_properties(volume)
+        iscsi_properties = self._get_iscsi_properties(volume, device_info)
         return {
             'driver_volume_type': 'iscsi',
             'data': iscsi_properties
@@ -212,7 +212,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
         return targets 
 
-    def _get_iscsi_properties(self, volume):
+    def _get_iscsi_properties(self, volume, device_info):
         """Gets iscsi configuration
 
         We ideally get saved information in the volume entity, but fall back
@@ -237,13 +237,6 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """
 
         properties = {}
-
-        device_info = self.common.find_device_number(volume)
-        if device_info is None:
-            exception_message = (_("Cannot find device number for volume %s")
-                                 % volume['name'])
-            raise exception.VolumeBackendAPIException(data=exception_message)
-
         ip_address = device_info['ip_address']
 
         location = self._do_iscsi_discovery(volume, ip_address)
@@ -254,14 +247,6 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
         LOG.debug(_("ISCSI Discovery: Found %s") % (location))
         properties['target_discovered'] = True
-
-        '''
-        device_info = self.common.find_device_number(volume)
-        if device_info is None or device_info['hostlunid'] is None:
-            exception_message = (_("Cannot find device number for volume %s")
-                                 % volume['name'])
-            raise exception.VolumeBackendAPIException(data=exception_message)
-        '''
 
         try:
             if device_info['hostlunid'] is None:

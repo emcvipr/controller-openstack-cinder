@@ -329,19 +329,7 @@ class EMCViPRDriverCommon():
                 hlu = '0';
 
             res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, hlu, None)
-
-            # Wait for LUN to be really attached
-            while (True):
-                device_info = self.find_device_number(volume)
-                try:
-                    device_number = device_info['hostlunid']
-                except KeyError:
-                    device_number = None
-
-                if (device_number is not None and device_number != '-1'):
-                    break
-                
-                time.sleep(10)
+            return self._find_device_info(volume, initiatorPort)
 
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Attach volume (" + self._get_volume_name(volume) + ") to host (" + hostname + ") initiator (" + initiatorPort + ") failed: " + e.err_text)
@@ -380,18 +368,13 @@ class EMCViPRDriverCommon():
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Detaching volume " + volumename + " from host " + hostname + " failed: " + e.err_text)
 
     @retry_wrapper
-    def find_device_number(self, volume):
+    def _find_device_info(self, volume, initiatorPort):
+        device_info = {} 
         try:
-            device_info = {} 
             volumename = self._get_volume_name(volume)
-
-            found_device_number = None
-            # fullname = self.configuration.vipr_tenant + '/' + self.configuration.vipr_project + '/' + volumename
             fullname = self.configuration.vipr_project + '/' + volumename
-            # 0 is a valid number for found_device_number.
-            # Only loop if it is None
-            while found_device_number is None:
-                vol_uri = self.volume_obj.volume_query(fullname)
+            vol_uri = self.volume_obj.volume_query(fullname)
+            while (True):
                 exports = self.volume_obj.get_exports_by_uri(vol_uri)
                 LOG.debug(_("Volume exports: %s") % exports)
                 """
@@ -403,27 +386,28 @@ class EMCViPRDriverCommon():
                 'initiator': 'iqn.1993-08.org.debian:01:56aafff0227d', 
                 'target': 'iqn.1992-04.com.emc:cx.apm00123907237.a8'}
                 """
-                found_device_number = exports['itl'][0]['hlu']
-                if found_device_number is None:
+                for itl in exports['itl']:
+                    if (str(initiatorPort) == itl['initiator']['port']):
+                        found_device_number = itl['hlu']
+                        # 0 is a valid number for found_device_number.
+                        # Only loop if it is None or -1
+                        if (found_device_number is not None and found_device_number != '-1'):
+                            LOG.debug(_("Found Device Number: %(found_device_number)s"))
+                            device_info['hostlunid'] = found_device_number
+                            device_info['endpoint'] = itl['target']['port']
+                            device_info['ip_address'] = itl['target']['ip_address']
+                            break
+                
+                if (device_info):
+                    break
+                else:
                     LOG.debug(_("Device Number not found. Retrying..."))
                     time.sleep(10)
-                    continue
-                else:
-                    LOG.debug(_("Found Device Number: %(found_device_number)s")
-                        % (locals()))
-
-                endpoint = exports['itl'][0]['target']['port']
-                ip_address = exports['itl'][0]['target']['ip_address']
-
-                device_info['hostlunid'] = str(found_device_number)
-                device_info['endpoint'] = endpoint 
-                device_info['ip_address'] = ip_address 
 
         except:
             pass
 
         return device_info
-
 
     def _get_volume_name(self, vol):
         try:
@@ -448,7 +432,7 @@ class EMCViPRDriverCommon():
 
         return vpool
 
-
+    @retry_wrapper
     def _find_exportgroup(self, initiator_port):
         '''
         Find the export group to which the given initiator port belong, if exists.
@@ -479,7 +463,7 @@ class EMCViPRDriverCommon():
 
         return (foundgroupname, hasVolumes)
 
-    
+    @retry_wrapper
     def _find_host(self, initiator_port):
         ''' Find the host, if exists, to which the given initiator belong. '''
         foundhostname = None
@@ -496,6 +480,7 @@ class EMCViPRDriverCommon():
 
         return foundhostname
 
+    @retry_wrapper
     def _host_exists(self, host_name):
         ''' Check if a Host object with the given hostname already exists in ViPR '''
         hosts = self.host_obj.host_list(self.configuration.vipr_tenant)
