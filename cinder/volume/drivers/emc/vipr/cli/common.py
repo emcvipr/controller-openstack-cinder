@@ -27,6 +27,7 @@ from requests.exceptions import Timeout
 import cookielib
 import xml.dom.minidom
 from xml.etree import ElementTree
+import ConfigParser
 
 
 
@@ -584,26 +585,27 @@ def _get_vipr_info(filename):
     if filename == None:
         return 
     
-    configfile = open(filename, 'r')
-    if (configfile):
-        line = configfile.readline()
-        while line :
-            if (line[0] == '#'):
-                line = configfile.readline()
-                continue
-            if line.startswith('vipr_hostname'):
-                sosenvval = None
-                (word,sosenvval) = line.rsplit('=',1)
-                sosenvval = sosenvval.rstrip()
-                sosenvval = sosenvval.lstrip()
-                os.environ['VIPR_HOSTNAME']=sosenvval
-            if line.startswith('vipr_port'):
-                sosenvval = None
-                (word,sosenvval) = line.rsplit('=',1)
-                sosenvval = sosenvval.rstrip()
-                sosenvval = sosenvval.lstrip()
-                os.environ['VIPR_PORT']=sosenvval                
-            line = configfile.readline()    
+    if filename == None:
+        return
+
+    config = ConfigParser.SafeConfigParser({'vipr_hostname' : 'localhost',
+                                            'vipr_port' : '4443'})
+    config.read(filename)
+
+    # only hostname and port are needed 
+    
+    # hostname
+    fqdn = config.get('DEFAULT', 'vipr_hostname')
+    os.environ['VIPR_HOSTNAME']=fqdn
+    # port
+    port = config.get('DEFAULT', 'vipr_port')
+    os.environ['VIPR_PORT']=port
+    # tenant
+    # tenant = config.get('DEFAULT', 'vipr_tenant')
+    # project
+    # project = config.get('DEFAULT', 'vipr_project')
+    # varray
+    # varray = config.get('DEFAULT', 'vipr_varray') 
     
     return
 
