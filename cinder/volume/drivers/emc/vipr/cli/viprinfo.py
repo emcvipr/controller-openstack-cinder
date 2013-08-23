@@ -17,46 +17,50 @@ import xml.dom.minidom
 def _get_vipr_info(filename):
     if filename == None:
         return
-    
-    vipr_file = open(filename, 'r')
-    data = vipr_file.read()
-    vipr_file.close()
-    dom = xml.dom.minidom.parseString(data)
-    fqdns = dom.getElementsByTagName('ViPRFQDN')
-    if fqdns is not None and len(fqdns) > 0:
-        fqdn = fqdns[0].toxml().replace('<ViPRFQDN>', '')
-        fqdn = fqdn.replace('</ViPRFQDN>', '')
-        
-    ports = dom.getElementsByTagName('ViPRPort')
-    if ports is not None and len(ports) > 0:
-        port = ports[0].toxml().replace('<ViPRPort>', '')
-        port = port.replace('</ViPRPort>', '')
 
-    users = dom.getElementsByTagName('ViPRUserName')
-    if users is not None and len(users) > 0:
-        user = users[0].toxml().replace('<ViPRUserName>', '')
-        user = user.replace('</ViPRUserName>', '')
+    configfile = open(filename, 'r')
+    if (configfile):
+        line = configfile.readline()
+        while line :
+            if (line[0] == '#'):
+                line = configfile.readline()
+                continue
+            if line.startswith('vipr_hostname'):
+                (word,fqdn) = line.rsplit('=',1)
+                fqdn = fqdn.rstrip()
+                fqdn = fqdn.lstrip()
+            if line.startswith('vipr_port'):
+                (word,port) = line.rsplit('=',1)
+                port = port.rstrip()
+                port = port.lstrip()
+            if line.startswith('vipr_tenant'):
+                (word,tenant) = line.rsplit('=',1)
+                tenant = tenant.rstrip()
+                tenant = tenant.lstrip()                
+            if line.startswith('vipr_project'):
+                (word,project) = line.rsplit('=',1)
+                project = project.rstrip()
+                project = project.lstrip()
+            if line.startswith('vipr_varray'):
+                (word,varray) = line.rsplit('=',1)
+                varray = varray.rstrip()
+                varray = varray.lstrip()
+                
+            if line.startswith('vipr_username'):
+                (word,username) = line.rsplit('=',1)
+                username = username.rstrip()
+                username = username.lstrip()                 
+            if line.startswith('vipr_password'):
+                (word,password) = line.rsplit('=',1)
+                password = password.rstrip()
+                password = password.lstrip()                       
+                
+                             
+            line = configfile.readline()   
 
-    passwords = dom.getElementsByTagName('ViPRPassword')
-    if passwords is not None and len(passwords) > 0:
-        password = passwords[0].toxml().replace('<ViPRPassword>', '')
-        password = password.replace('</ViPRPassword>', '')
 
-    tenants = dom.getElementsByTagName('ViPRTenant')
-    if tenants is not None and len(tenants) > 0:
-        tenant = tenants[0].toxml().replace('<ViPRTenant>', '')
-        tenant = tenant.replace('</ViPRTenant>', '')
 
-    projects = dom.getElementsByTagName('ViPRProject')
-    if projects is not None and len(projects) > 0:
-        project = projects[0].toxml().replace('<ViPRProject>', '')
-        project = project.replace('</ViPRProject>', '')
 
-    varrays = dom.getElementsByTagName('ViPRVirtualArray')
-    if varrays is not None and len(varrays) > 0:
-        varray = varrays[0].toxml().replace('<ViPRVirtualArray>', '')
-        varray = varray.replace('</ViPRVirtualArray>', '')
- 
     viprinfo = {'FQDN': str(fqdn),
                 'port': str(port),
                 'username': str(user),

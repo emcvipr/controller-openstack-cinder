@@ -85,108 +85,23 @@ class EMCViPRDriverCommon():
              'volume_backend_name': 'EMCViPRISCSIDriver'}
              
     def __init__(self, prtcl, configuration=None):
-        opt = cfg.StrOpt('cinder_emc_vipr_config_file',
-                         default=CINDER_EMC_VIPR_CONFIG_FILE,
-                         help='use this file for cinder emc plugin '
-                         'config data')
-        CONF.register_opt(opt)
         self.protocol = prtcl
         self.configuration = configuration
-        self.configuration.append_config_values([opt])
-
-        self._get_vipr_info()
         vipr_utils.COOKIE = None
         
         # instantiate a few vipr cli objects for later use
-        self.volume_obj = Volume(self.fqdn, self.port)
-        self.exportgroup_obj = ExportGroup(self.fqdn, self.port)
-        self.host_obj = Host(self.fqdn, self.port)
-
-
-    def _get_vipr_info(self, filename=None):
-        if filename == None:
-            filename = filename = self.configuration.cinder_emc_vipr_config_file 
-
-        file = open(filename, 'r')
-        data = file.read()
-        file.close()
-        dom = parseString(data)
-        fqdns = dom.getElementsByTagName('ViPRFQDN')
-        if fqdns is not None and len(fqdns) > 0:
-            fqdn = fqdns[0].toxml().replace('<ViPRFQDN>', '')
-            fqdn = fqdn.replace('</ViPRFQDN>', '')
-            self.fqdn = fqdn
-            LOG.debug(_("ViPR FQDN: %(fqdn)s") % (locals()))
-        ports = dom.getElementsByTagName('ViPRPort')
-        if ports is not None and len(ports) > 0:
-            port = ports[0].toxml().replace('<ViPRPort>', '')
-            port = port.replace('</ViPRPort>', '')
-            self.port = int(port)
-            LOG.debug(_("ViPR Port: %(port)s") % (locals()))
-        if fqdn is None or port is None:
-            LOG.debug(_("ViPR server not found."))
-            return None
-
-        users = dom.getElementsByTagName('ViPRUserName')
-        if users is not None and len(users) > 0:
-            user = users[0].toxml().replace('<ViPRUserName>', '')
-            user = user.replace('</ViPRUserName>', '')
-            self.user = user
-            LOG.debug(_("ViPR user name: %(user)s") % (locals()))
-        passwords = dom.getElementsByTagName('ViPRPassword')
-        if passwords is not None and len(passwords) > 0:
-            password = passwords[0].toxml().replace('<ViPRPassword>', '')
-            password = password.replace('</ViPRPassword>', '')
-            self.password = password
-        if user is None or password is None:
-            LOG.debug(_("ViPR server user credentials not found."))
-            return None
-
-        tenants = dom.getElementsByTagName('ViPRTenant')
-        if tenants is not None and len(tenants) > 0:
-            tenant = tenants[0].toxml().replace('<ViPRTenant>', '')
-            tenant = tenant.replace('</ViPRTenant>', '')
-            self.tenant = tenant
-            LOG.debug(_("ViPR tenant: %(tenant)s") % (locals()))
-        if tenant is None:
-            LOG.debug(_("ViPR tenant not found in the config file."))
-            return None
-
-        projects = dom.getElementsByTagName('ViPRProject')
-        if projects is not None and len(projects) > 0:
-            project = projects[0].toxml().replace('<ViPRProject>', '')
-            project = project.replace('</ViPRProject>', '')
-            self.project = project
-            LOG.debug(_("ViPR project: %(project)s") % (locals()))
-        if project is None:
-            LOG.debug(_("ViPR project not found in the config file."))
-            return None
-
-        nhs = dom.getElementsByTagName('ViPRVirtualArray')
-        if nhs is not None and len(nhs) > 0:
-            nh = nhs[0].toxml().replace('<ViPRVirtualArray>', '')
-            nh = nh.replace('</ViPRVirtualArray>', '')
-            self.virtualarray = nh
-            LOG.debug(_("ViPR VirtualArray: %(nh)s") % (locals()))
-        if nh is None:
-            LOG.debug(_("ViPR VirtualArray not found in the config file."))
-            return None
-
-        viprinfo = {'FQDN': fqdn, 'port': port, 'username': user,
-                    'password': password,
-                    'tenant': tenant, 'project': project,
-                    'virtualarray': nh}
-
-        return viprinfo
+        self.volume_obj = Volume(self.configuration.vipr_hostname, self.configuration.vipr_port)
+        self.exportgroup_obj = ExportGroup(self.configuration.vipr_hostname, self.configuration.vipr_port)
+        self.host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
 
     def authenticate_user(self):       
         global AUTHENTICATED
         
         # we should check to see if we are already authenticated before blindly doing it again
         if (AUTHENTICATED == False ):
-            obj = Authentication(self.fqdn, self.port)
+            obj = Authentication(self.configuration.vipr_hostname, self.configuration.vipr_port)
             cookiedir = os.getcwd()
-            obj.authenticate_user(self.user, self.password, cookiedir, None)
+            obj.authenticate_user(self.configuration.vipr_username, self.configuration.vipr_password, cookiedir, None)
             AUTHENTICATED = True
 
     @retry_wrapper
@@ -204,10 +119,10 @@ class EMCViPRDriverCommon():
         try:
             sync = True
             count = 1
-            res = self.volume_obj.create(self.tenant + "/" + self.project,
+            res = self.volume_obj.create(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project,
                              name,
                              size,
-                             self.virtualarray,
+                             self.configuration.vipr_varray,
                              self.vpool,
                              None,
                              sync,
@@ -235,14 +150,14 @@ class EMCViPRDriverCommon():
                 
         # first, get the current tags that start with the OPENSTACK_TAG eyecatcher
         removeTags=[]
-        currentTags = self.volume_obj.getTags(self.tenant + "/" + self.project + "/" + name)
+        currentTags = self.volume_obj.getTags(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name)
         for cTag in currentTags:
             if (cTag.startswith(self.OPENSTACK_TAG)):
                 removeTags.append(cTag)
 
         try:
             if (len(removeTags)>0):
-                self.volume_obj.modifyTags(self.tenant + "/" + self.project + "/" + name, None, removeTags)
+                self.volume_obj.modifyTags(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name, None, removeTags)
         except SOSError as e:
             if (e.err_code == SOSError.SOS_FAILURE_ERR):
                 LOG.debug("SOSError adding the tag: " + e.err_text)
@@ -260,12 +175,12 @@ class EMCViPRDriverCommon():
                 pass
         
         try:
-            self.volume_obj.modifyTags(self.tenant + "/" + self.project + "/" + name, addTags, None)
+            self.volume_obj.modifyTags(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name, addTags, None)
         except SOSError as e:
             if (e.err_code == SOSError.SOS_FAILURE_ERR):
                 LOG.debug("SOSError adding the tag: " + e.err_text)
                 
-        return self.volume_obj.getTags(self.tenant + "/" + self.project + "/" + name)    
+        return self.volume_obj.getTags(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name)    
 
     @retry_wrapper
     def create_cloned_volume(self, vol, src_vref):
@@ -277,7 +192,7 @@ class EMCViPRDriverCommon():
         try:
             sync = True
             count = 1
-            res = self.volume_obj.clone(self.tenant + "/" + self.project,
+            res = self.volume_obj.clone(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project,
                              name,
                              count,
                              srcname,
@@ -297,7 +212,7 @@ class EMCViPRDriverCommon():
         self.authenticate_user()
         name = self._get_volume_name(vol)
         try:
-            self.volume_obj.delete(self.tenant + "/" + self.project + "/" + name, None, True)   # synchronous call
+            self.volume_obj.delete(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name, None, True)   # synchronous call
         except SOSError as e:
             if (e.err_code == SOSError.SOS_FAILURE_ERR):
                 raise SOSError(SOSError.SOS_FAILURE_ERR, "Volume " +
@@ -308,7 +223,7 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def list_volume(self):
         try:
-            uris = self.volume_obj.list_volumes(self.tenant + "/" + self.project)
+            uris = self.volume_obj.list_volumes(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project)
             if(len(uris) > 0):
                 output = []
                 for uri in uris:
@@ -330,13 +245,13 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def create_snapshot(self, snapshot):
         self.authenticate_user()
-        obj = Snapshot(self.fqdn, self.port)
+        obj = Snapshot(self.configuration.vipr_hostname, self.configuration.vipr_port)
         try:    
             snapshotname = snapshot['name']
             vol = snapshot['volume']
             volumename = self._get_volume_name(vol)
-            projectname = self.project
-            tenantname = self.tenant
+            projectname = self.configuration.vipr_project
+            tenantname = self.configuration.vipr_tenant
             storageresType = 'block'
             storageresTypename = 'volumes'
             filesystem = None
@@ -356,13 +271,13 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def delete_snapshot(self, snapshot):
         self.authenticate_user()
-        obj = Snapshot(self.fqdn, self.port)
+        obj = Snapshot(self.configuration.vipr_hostname, self.configuration.vipr_port)
         try:
             snapshotname = snapshot['name']
             vol = snapshot['volume']
             volumename = self._get_volume_name(vol)
-            projectname = self.project
-            tenantname = self.tenant
+            projectname = self.configuration.vipr_project
+            tenantname = self.configuration.vipr_tenant
             storageresType = 'block'
             storageresTypename = 'volumes'
             filesystem = None
@@ -389,8 +304,8 @@ class EMCViPRDriverCommon():
                 if (foundhostname is None):
                     if (not self._host_exists(hostname)):
                         # create a host so it can be added to the export group
-                        host_obj = Host(self.fqdn, self.port)
-                        host_obj.host_create(hostname, self.project, self.tenant, socket.getfqdn())
+                        host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
+                        host_obj.host_create(hostname, self.configuration.vipr_project, self.configuration.vipr_tenant, socket.getfqdn())
                         LOG.info("Created host " + hostname)
                     # add the initiator to the host
                     host_obj.host_add_initiator(hostname, initiatorPort, protocol, initiatorNode);
@@ -405,7 +320,7 @@ class EMCViPRDriverCommon():
                 foundgroupname = hostname + 'SG'
                 # create a unique name
                 foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
-                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.project, self.tenant, self.virtualarray, 'Host', foundhostname);
+                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname);
                 
             # Workaround for the hlu reporting issue in ViPR for the first volume in the storage group
             hlu = None
@@ -413,7 +328,7 @@ class EMCViPRDriverCommon():
                 LOG.info("Export group " + foundgroupname + " has no volumes being exported; requesting the hlu to be 0.")
                 hlu = '0';
 
-            res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.project, self.tenant, volumename, hlu, None)
+            res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, hlu, None)
 
             # Wait for LUN to be really attached
             device_number = None
@@ -436,13 +351,13 @@ class EMCViPRDriverCommon():
         try:
             self.authenticate_user()
             volumename = self._get_volume_name(volume)
-            tenantproject = self.tenant+ '/' + self.project
+            tenantproject = self.configuration.vipr_tenant+ '/' + self.configuration.vipr_project
             voldetails = self.volume_obj.show(tenantproject + '/' + volumename)
             volid = voldetails['id']
 
             (foundgroupname, hasVolumes) = self._find_exportgroup(initiatorPort)
             if foundgroupname is not None:
-                res = self.exportgroup_obj.exportgroup_remove_volumes(foundgroupname, self.project, self.tenant, volumename, False)    # no snapshot (snapshot = False)
+                res = self.exportgroup_obj.exportgroup_remove_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, False)    # no snapshot (snapshot = False)
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Removing volume " + volumename + " from export Group " + foundgroupname + " failed: " + e.err_text)
 
@@ -453,8 +368,8 @@ class EMCViPRDriverCommon():
             volumename = self._get_volume_name(volume)
 
             found_device_number = None
-            # fullname = self.tenant + '/' + self.project + '/' + volumename
-            fullname = self.project + '/' + volumename
+            # fullname = self.configuration.vipr_tenant + '/' + self.configuration.vipr_project + '/' + volumename
+            fullname = self.configuration.vipr_project + '/' + volumename
             # 0 is a valid number for found_device_number.
             # Only loop if it is None
             while found_device_number is None:
@@ -524,9 +439,9 @@ class EMCViPRDriverCommon():
         '''
         foundgroupname = None
         hasVolumes = False
-        grouplist = self.exportgroup_obj.exportgroup_list(self.project, self.tenant)
+        grouplist = self.exportgroup_obj.exportgroup_list(self.configuration.vipr_project, self.configuration.vipr_tenant)
         for groupid in grouplist:
-            groupdetails = self.exportgroup_obj.exportgroup_show(groupid, self.project, self.tenant)
+            groupdetails = self.exportgroup_obj.exportgroup_show(groupid, self.configuration.vipr_project, self.configuration.vipr_tenant)
             initiators = groupdetails['initiators']
             for initiator in initiators:
                 if (initiator['initiator_port'] == initiator_port):
@@ -550,7 +465,7 @@ class EMCViPRDriverCommon():
     def _find_host(self, initiator_port):
         ''' Find the host, if exists, to which the given initiator belong. '''
         foundhostname = None
-        hosts = self.host_obj.host_list(self.tenant)
+        hosts = self.host_obj.host_list(self.configuration.vipr_tenant)
         for host in hosts:
             initiators = self.host_obj.host_query_initiators(host['id'])
             for initiator in initiators:
@@ -565,7 +480,7 @@ class EMCViPRDriverCommon():
 
     def _host_exists(self, host_name):
         ''' Check if a Host object with the given hostname already exists in ViPR '''
-        hosts = self.host_obj.host_list(self.tenant)
+        hosts = self.host_obj.host_list(self.configuration.vipr_tenant)
         for host in hosts:
             if (host_name == host['name']):
                 return True
@@ -580,7 +495,7 @@ class EMCViPRDriverCommon():
         self.authenticate_user()
  
         try:
-            vols = self.volume_obj.list_volumes(self.tenant + "/" + self.project)
+            vols = self.volume_obj.list_volumes(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project)
             vpairs = set()            
             if (len(vols) > 0):
                 for vol in vols:
@@ -597,7 +512,7 @@ class EMCViPRDriverCommon():
                 percent_provisioned = 0.0            
                 for vpair in vpairs:            
                     if(vpair): 
-                        (s, h) = vipr_utils.service_json_request(self.fqdn, self.port,
+                        (s, h) = vipr_utils.service_json_request(self.configuration.vipr_hostname, self.configuration.vipr_port,
                                       "GET",
                                       URI_VPOOL_VARRAY_CAPACITY.format(vpair[0], vpair[1]),
                                       None)

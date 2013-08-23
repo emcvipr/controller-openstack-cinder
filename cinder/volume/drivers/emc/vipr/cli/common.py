@@ -520,7 +520,7 @@ def getenv(envvarname, envdefaultvalue=None):
         
         # short circuit this, check for the existence of the openstack cinder config file
         # and read it if found
-        _get_vipr_info('/etc/cinder/cinder_emc_vipr_config.xml')
+        _get_vipr_info('/etc/cinder/cinder.conf')
         
         soscli_dir_path = os.path.dirname(os.path.dirname(
                                 os.path.abspath(sys.argv[0])))
@@ -584,25 +584,27 @@ def _get_vipr_info(filename):
     if filename == None:
         return 
     
-    file = open(filename, 'r')
-    if file:
-        data = file.read()
-        file.close()
-        dom = parseString(data)
-        fqdns = dom.getElementsByTagName('ViPRFQDN')
-        if fqdns is not None and len(fqdns) > 0:
-            # put the FQDN into the environment as VIPR_HOSTNAME
-            fqdn = fqdns[0].toxml().replace('<ViPRFQDN>', '')
-            fqdn = fqdn.replace('</ViPRFQDN>', '')
-            os.environ['VIPR_HOSTNAME']=fqdn
-        ports = dom.getElementsByTagName('ViPRPort')
-        if ports is not None and len(ports) > 0:
-            # put the Port into the environment as VIPR_PORT
-            port = ports[0].toxml().replace('<ViPRPort>', '')
-            port = port.replace('</ViPRPort>', '')
-            os.environ['VIPR_PORT']=port
-                            
-
+    configfile = open(filename, 'r')
+    if (configfile):
+        line = configfile.readline()
+        while line :
+            if (line[0] == '#'):
+                line = configfile.readline()
+                continue
+            if line.startswith('vipr_hostname'):
+                sosenvval = None
+                (word,sosenvval) = line.rsplit('=',1)
+                sosenvval = sosenvval.rstrip()
+                sosenvval = sosenvval.lstrip()
+                os.environ['VIPR_HOSTNAME']=sosenvval
+            if line.startswith('vipr_port'):
+                sosenvval = None
+                (word,sosenvval) = line.rsplit('=',1)
+                sosenvval = sosenvval.rstrip()
+                sosenvval = sosenvval.lstrip()
+                os.environ['VIPR_PORT']=sosenvval                
+            line = configfile.readline()    
+    
     return
 
 #This method defines the standard and consistent error message format

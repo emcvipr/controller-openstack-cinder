@@ -49,27 +49,19 @@ Download and configure EMC ViPR Cinder driver
 
 * Download the EMC ViPR Cinder driver from the following location: https://github.com/emcvipr/controller-openstack-cinder. Copy the vipr subdirectory to the cinder/volume/emc directory of your OpenStack node(s) where cinder-volume is running.  This directory is where other Cinder drivers are located.
 
-* Modify /etc/cinder/cinder.conf by adding the following lines:
+* Modify /etc/cinder/cinder.conf by adding the following lines, substituting values for your environment:
 ```
 volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRISCSIDriver
-cinder_emc_config_file = /etc/cinder/cinder_emc_config.xml
+vipr_hostname=lgly7180.lss.emc.com
+vipr_port=4443
+vipr_username=username
+vipr_password=password
+vipr_tenant=Provider Tenant 
+vipr_project=proj-iscsi
+vipr_varray=va-iscsi
+
 ```
 
-* Create the /etc/cinder/cinder_emc_config.xml, with the folowing content:
-```xml
-<?xml version='1.0' encoding='UTF-8'?>
-<EMC>
-  <ViPR>
-    <ViPRFQDN>vipr.hostname.org</ViPRFQDN>
-    <ViPRPort>4443</ViPRPort>
-    <ViPRUserName>userid</ViPRUserName>
-    <ViPRPassword>password</ViPRPassword>
-    <ViPRTenant>Provider Tenant</ViPRTenant>
-    <ViPRProject>BLOCK_PROJECT</ViPRProject>
-    <ViPRVirtualArray>HOPKINTON</ViPRVirtualArray>
-  </ViPR>
-</EMC>
-```
 
 * Create OpenStack volume types with the cinder command
 ```

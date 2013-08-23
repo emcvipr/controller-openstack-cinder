@@ -17,7 +17,8 @@ Driver for EMC ViPR iSCSI volumes.
 import os
 import socket
 import time
-from xml.dom.minidom import parseString
+from oslo.config import cfg
+
 
 from cinder import exception
 # ERIC: we get an error imprting flags
@@ -29,17 +30,77 @@ from cinder.volume.drivers.emc.vipr.emc_vipr_driver_common import EMCViPRDriverC
 
 LOG = logging.getLogger(__name__)
 
+volume_opts = [
+    cfg.StrOpt('vipr_hostname',
+               default=None,
+               help='Hostname for the EMC ViPR Instance'),
+    cfg.IntOpt('vipr_port',
+               default=4443,
+               help='Port for the EMC ViPR Instance'),
+    cfg.StrOpt('vipr_username',
+               default=None,
+               help='Username for accessing the EMC ViPR Instance'),
+    cfg.StrOpt('vipr_password',
+               default=None,
+               help='Password for accessing the EMC ViPR Instance'),
+    cfg.StrOpt('vipr_tenant',
+               default=None,
+               help='Tenant to utilize within the EMC ViPR Instance'),   
+    cfg.StrOpt('vipr_project',
+               default=None,
+               help='Project to utilize within the EMC ViPR Instance'),                 
+    cfg.StrOpt('vipr_varray',
+               default=None,
+               help='Virtual Array to utilize within the EMC ViPR Instance')                  
+    ]
+
+CONF=cfg.CONF
+CONF.register_opts(volume_opts)
 
 class EMCViPRISCSIDriver(driver.ISCSIDriver):
     """EMC ViPR iSCSI Driver"""
     
     def __init__(self, *args, **kwargs):
         super(EMCViPRISCSIDriver, self).__init__(*args, **kwargs)
+        self.configuration.append_config_values(volume_opts)
         self.common = EMCViPRDriverCommon(
                         'iSCSI',
                         configuration=self.configuration)
 
     def check_for_setup_error(self):
+        # validate all of the vipr_* configuration values        
+        if (self.configuration.vipr_hostname is None):
+            message="vipr_hostname is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)
+        
+        if (self.configuration.vipr_port is None):
+            message="vipr_port is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)
+                  
+        if (self.configuration.vipr_username is None):
+            message="vipr_username is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message) 
+           
+        if (self.configuration.vipr_password is None):
+            message="vipr_password is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)  
+           
+        if (self.configuration.vipr_tenant is None):
+            message="vipr_tenant is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)  
+            
+        if (self.configuration.vipr_project is None):
+            message="vipr_project is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)  
+            
+        if (self.configuration.vipr_varray is None):
+            message="vipr_varray is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)
+                                
+        # check the rpc_response_timeout value, should be greater than 300 
+        if (self.configuration.rpc_response_timeout<300):
+            LOG.warn(_("cinder configuration should set rpc_response_time to at least 300 seconds"))
+            
         pass
 
     def create_volume(self, volume):
@@ -276,3 +337,4 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """Retrieve stats info from virtual pool/virtual array."""
         LOG.debug(_("Updating volume stats"))
         self._stats = self.common.update_volume_stats()
+
