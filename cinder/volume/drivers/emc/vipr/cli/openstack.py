@@ -35,7 +35,7 @@ class Openstack(object):
     URI_STORAGEPORT_ALL = '/vdc/storage-ports'
     URI_STORAGEPORT_BULK = '/vdc/storage-ports/bulk'
 
-    VIPR_CONFIG_FILE = '/etc/cinder/cinder_emc_vipr_config.xml'
+    VIPR_CONFIG_FILE = '/etc/cinder/cinder.conf'
 
         
     def __init__(self, ipAddr, port):
