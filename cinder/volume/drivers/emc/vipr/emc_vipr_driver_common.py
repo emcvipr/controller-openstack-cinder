@@ -331,16 +331,17 @@ class EMCViPRDriverCommon():
             res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, hlu, None)
 
             # Wait for LUN to be really attached
-            device_number = None
-            while (device_number is None or device_number == '-1'):
+            while (True):
                 device_info = self.find_device_number(volume)
                 try:
                     device_number = device_info['hostlunid']
                 except KeyError:
                     device_number = None
 
-                if (device_number is None or device_number == '-1'):
-                    time.sleep(10)
+                if (device_number is not None and device_number != '-1'):
+                    break
+                
+                time.sleep(10)
 
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Attach volume (" + self._get_volume_name(volume) + ") to host (" + hostname + ") initiator (" + initiatorPort + ") failed: " + e.err_text)
@@ -358,8 +359,25 @@ class EMCViPRDriverCommon():
             (foundgroupname, hasVolumes) = self._find_exportgroup(initiatorPort)
             if foundgroupname is not None:
                 res = self.exportgroup_obj.exportgroup_remove_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, False)    # no snapshot (snapshot = False)
+                
+            while (True):
+                try:
+                    exports = self.volume_obj.get_exports_by_uri(volid)
+                except SOSError as e:
+                    '''
+                    Working around a ViPR issue that the /exports may be unavailable
+                    for a short period of time right after the volume is unexported
+                    '''
+                    LOG.warn("Waiting for the volume " + volumename + " to be detached.")
+                    time.sleep(10)
+                    continue
+                
+                if len(exports['itl']) == 0:
+                    break
+                time.sleep(10)
+                
         except SOSError as e:
-            raise SOSError(SOSError.SOS_FAILURE_ERR, "Removing volume " + volumename + " from export Group " + foundgroupname + " failed: " + e.err_text)
+            raise SOSError(SOSError.SOS_FAILURE_ERR, "Detaching volume " + volumename + " from host " + hostname + " failed: " + e.err_text)
 
     @retry_wrapper
     def find_device_number(self, volume):
