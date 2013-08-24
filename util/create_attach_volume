@@ -1,16 +1,23 @@
 #!/bin/bash
 
 # script that:
-#   - creates one instance
-#   - creates one volume  (of a predefined OpenStack volume type)
-#   - attaches the volume to the instance
+#   - creates one volume (of a predefined OpenStack volume type)
+#   - optionally creates an instance and attach the volume to it
+#   - optionally creates a snapshot of the volume and clones the volume
+#   - optionally copies an image to a volume and then copies it back as a new image
+#   - cleans up everything
 
 DATE=`date "+%m%d%Y%H%M"`
-MNT="/dev/vdc"
+#MNT="/dev/vdc"
+MNT="auto"
 VOLUMETYPE="ViPR High Performance"
-VOLNAME="openstack-iscsi-${DATE}"
-CLONENAME="clone-iscsi-${DATE}"
-SNAPNAME="snapshot-iscsi-${DATE}"
+NAMESUFFIX="openstack-${HOSTNAME}-${DATE}"
+VOLNAME="volume-${NAMESUFFIX}"
+CLONENAME="clone-${NAMESUFFIX}"
+SNAPNAME="snapshot-${NAMESUFFIX}"
+IMAGENAME="cirros-0.3.1-x86_64-uec"
+IMAGEVOLNAME="image-volume-${NAMESUFFIX}"
+NEWIMAGENAME="new-image-${NAMESUFFIX}"
 
 INSTNAME="instance-${DATE}"
 #get the nova image id
@@ -33,32 +40,32 @@ echo "*** volume is now available"
 VOLUME=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f2 -d' ')
 
 
-# create a snapshot
-echo "Creating a snapshot"
-cinder snapshot-create --display-name "${SNAPNAME}" "${VOLUME}"
-echo "Waiting for snapshot '${SNAPNAME}' to be created"
-STATUS="unknown"
-while [ "${STATUS}" != "available" ]; do
-   sleep 5
-   STATUS=$( cinder snapshot-list | grep "${SNAPNAME}" | tr -s ' ' | cut -f6 -d' ')
-done
-#get the snapshot id
-SNAPSHOT=$( cinder snapshot-list | grep "${SNAPNAME}" | tr -s ' ' | cut -f2 -d' ')
+read -p "do you want to create a snapshot as well as clone the volume? [N/y] " DOSNAPCLONE
+if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
+    # create a snapshot
+    echo "Creating a snapshot"
+    cinder snapshot-create --display-name "${SNAPNAME}" "${VOLUME}"
+    echo "Waiting for snapshot '${SNAPNAME}' to be created"
+    STATUS="unknown"
+    while [ "${STATUS}" != "available" ]; do
+        sleep 5
+        STATUS=$( cinder snapshot-list | grep "${SNAPNAME}" | tr -s ' ' | cut -f6 -d' ')
+    done
+    #get the snapshot id
+    SNAPSHOT=$( cinder snapshot-list | grep "${SNAPNAME}" | tr -s ' ' | cut -f2 -d' ')
 
-
-# create a clone
-echo "Creating a clone"
-cinder create --source-volid "${VOLUME}" --display-name "${CLONENAME}" 1
-echo "Waiting for clone '${CLONENAME}' to be created"
-STATUS="unknown"
-while [ "${STATUS}" != "available" ]; do
-   sleep 5
-   STATUS=$( cinder list | grep "${CLONENAME}" | tr -s ' ' | cut -f4 -d' ')
-done
-#get the clone id
-CLONE=$( cinder list | grep "${CLONENAME}" | tr -s ' ' | cut -f2 -d' ')
-
-
+    # create a clone
+    echo "Creating a clone"
+    cinder create --source-volid "${VOLUME}" --display-name "${CLONENAME}" 1
+    echo "Waiting for clone '${CLONENAME}' to be created"
+    STATUS="unknown"
+    while [ "${STATUS}" != "available" ]; do
+        sleep 5
+        STATUS=$( cinder list | grep "${CLONENAME}" | tr -s ' ' | cut -f4 -d' ')
+    done
+    #get the clone id
+    CLONE=$( cinder list | grep "${CLONENAME}" | tr -s ' ' | cut -f2 -d' ')
+fi
 
 
 read -p "do you want to create an instance and attach a the volume to it? [N/y] " ATTACH
@@ -94,7 +101,35 @@ if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
 fi
 
 
-read -p "Press [Enter] to continue and delete both the volume and instance"
+read -p "do you want to copy an image to a volume and then copy it back as another image? [N/y] " DOIMAGE
+if [ "${DOIMAGE}" == "y" -o "${DOIMAGE}" == "Y" ]; then
+    echo "Copying image '${IMAGENAME}' to volume '${IMAGEVOLNAME}' ..."
+    IMAGEID=$( glance image-list | grep " ${IMAGENAME} " | tr -s ' ' | cut -f2 -d' ')
+    cinder create --display-name "${IMAGEVOLNAME}" --volume-type "${VOLUMETYPE}" --image-id "${IMAGEID}" 1
+    echo "Waiting for volume '${IMAGEVOLNAME}' to be created..."
+    STATUS="unknown"
+    while [ "${STATUS}" != "available" ]; do
+        sleep 5
+        STATUS=$( cinder list | grep "${IMAGEVOLNAME}" | tr -s ' ' | cut -f4 -d' ')
+    done
+    echo "*** copy image to volume done ***"
+
+    sleep 60    # to allow vipr clean up the internal state before the same volume can be exported again
+
+    echo "Copying volume '${IMAGEVOLNAME}' as a new image '${NEWIMAGENAME}'"
+    VOLID=$( cinder list | grep "${IMAGEVOLNAME}" | tr -s ' ' | cut -f2 -d' ')
+    cinder upload-to-image "${VOLID}" "${NEWIMAGENAME}"
+    echo "Waiting the new image '${NEWIMAGENAME}' to be created ..."
+    STATUS="unknown"
+    while [ "${STATUS}" != "active" ]; do
+        sleep 5
+        STATUS=$( glance image-list | grep "${NEWIMAGENAME}" | tr -s ' ' | cut -f12 -d' ')
+    done
+    echo "*** copy volume to image done ***"
+fi
+
+
+read -p "Press [Enter] to continue and delete all created volumes, snapshot, image and instance"
 
 if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    # detach the volume
@@ -113,25 +148,49 @@ if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    nova delete $INSTANCE
 fi
 
-# now delete the snapshot
-echo "*** deleting the snapshot"
-cinder snapshot-delete "${SNAPSHOT}"
-echo "Waiting for snapshot to be deleted"
-STATUS="unknown"
-while [ "${STATUS}" != "0" ]; do
-   sleep 5
-   STATUS=$( cinder snapshot-list | grep "${SNAPSHOT}" | wc -l )
-done
+if [ "${DOIMAGE}" == "y" -o "${DOIMAGE}" == "Y" ]; then
+    echo "*** deleting the image '${NEWIMAGENAME} ***"
+    glance image-delete "${NEWIMAGENAME}"
+    echo "Waiting for image '${NEWIMAGENAME}' to be deleted ..."
+    STATUS="unknown"
+    while [ "${STATUS}" != "0" ]; do
+        sleep 5
+        STATUS=$( glance image-list | grep "${NEWIMAGENAME}" | wc -l )
+    done
+    echo "*** image '${NEWIMAGENAME}' has been deleted ***"
 
-# now delete the clone
-echo "***deleting the clone"
-cinder delete "${CLONE}"
-echo "Waiting for clone to be deleted"
-STATUS="unknown"
-while [ "${STATUS}" != "0" ]; do
-   sleep 5
-   STATUS=$( cinder list | grep "${CLONE}" | wc -l )
-done
+    echo "*** deleting the volume '${IMAGEVOLNAME}' ***"
+    cinder delete "${IMAGEVOLNAME}"
+    echo "Waiting for the volume '${IMAGEVOLNAME}' to be deleted ..."
+    STATUS="unknown"
+    while [ "${STATUS}" != "0" ]; do
+        sleep 5
+        STATUS=$( cinder list | grep "${IMAGEVOLNAME}" | wc -l )
+    done
+    echo "*** volume '${IMAGEVOLNAME}' has been deleted ***"
+fi
+
+if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
+    # now delete the snapshot
+    echo "*** deleting the snapshot"
+    cinder snapshot-delete "${SNAPSHOT}"
+    echo "Waiting for snapshot to be deleted"
+    STATUS="unknown"
+    while [ "${STATUS}" != "0" ]; do
+        sleep 5
+        STATUS=$( cinder snapshot-list | grep "${SNAPSHOT}" | wc -l )
+    done
+
+    # now delete the clone
+    echo "***deleting the clone"
+    cinder delete "${CLONE}"
+    echo "Waiting for clone to be deleted"
+    STATUS="unknown"
+    while [ "${STATUS}" != "0" ]; do
+        sleep 5
+        STATUS=$( cinder list | grep "${CLONE}" | wc -l )
+    done
+fi
 
 # now delete the volume
 echo "*** deleting the volume"
@@ -142,9 +201,4 @@ while [ "${STATUS}" != "0" ]; do
    sleep 5
    STATUS=$( cinder list | grep "${VOLUME}" | wc -l )
 done
-
-
-
-
-
 
