@@ -62,7 +62,8 @@ def retry_wrapper(func):
                 exception_message = "\nViPR Exception: %s\nStack Trace:\n%s" % (e.err_text,traceback.format_exc())
                 raise exception.VolumeBackendAPIException(data=exception_message)               
         except Exception as o:
-            raise o
+            exception_message = "\nGeneral Exception: %s\nStack Trace:\n%s" % (sys.exc_info()[0],traceback.format_exc())
+            raise exception.VolumeBackendAPIException(data=exception_message)   
     
         if (retry):        
             return func(*args, **kwargs)
