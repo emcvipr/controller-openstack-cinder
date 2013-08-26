@@ -13,14 +13,24 @@ import sys
 import json
 import platform
 import socket
+import logging
+
+from nova.virt.libvirt import utils as libvirt_utils
+from nova import utils
 
 import common
 from common import SOSError
 from network import Network
 from host import Host
-from viprinfo import _get_vipr_info as VIPRINFO
+import viprinfo as _viprinfo
 
-from nova.virt.libvirt import utils as libvirt_utils
+'''
+LOG = logging.getLogger(__name__)
+ch = logging.StreamHandler(sys.stdout)
+ch.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s : %(message)s')
+LOG.addHandler(ch)
+'''
 
 class Openstack(object):
     '''
@@ -38,16 +48,28 @@ class Openstack(object):
     VIPR_CONFIG_FILE = '/etc/cinder/cinder.conf'
 
         
-    def __init__(self, ipAddr, port):
+    def __init__(self, ipAddr, port, verbose):
         '''
         Constructor: takes IP address and port of the ViPR instance. These are
         needed to make http requests for REST API   
         '''
         self.__ipAddr = ipAddr
         self.__port = port
-        self.__host = Host(self.__ipAddr, self.__port)
-        self.__network = Network(self.__ipAddr, self.__port)
-        
+        self._host = Host(self.__ipAddr, self.__port)
+        self._network = Network(self.__ipAddr, self.__port)
+        self._execute = utils.execute
+        self.set_logging(verbose)
+            
+    def set_logging(self, verbose):
+        self._logger = logging.getLogger(__name__)
+        if (verbose):
+            self._logger.setLevel(logging.DEBUG)
+        else:
+            self._logger.setLevel(logging.INFO)
+        logging.basicConfig(format='%(asctime)s:%(levelname)s: %(message)s')
+    def get_logger(self):
+        return self._logger    
+                
     def get_hostname(self, hostname = None):
         if (not hostname):
             return socket.getfqdn()
@@ -55,21 +77,32 @@ class Openstack(object):
             return hostname
     
     def add_host(self, host_param, connector, vipr_param):
+        
+        varray = vipr_param['varray']
+        
         # Find or create host.
         host = self.create_host(host_param['hostname'])
-        self.log_info('Created/Found host ' + host['name'])
+        self._logger.info('Created/found host %s', host['name'])
+        self._logger.debug('Details of host %s: %s', host_param['hostname'], host)     
                 
         # Find or create initiator.
         initiator = self.create_initiator(host, connector)    
-        self.log_info('Added initiator ' + initiator['initiator_port'] + ' to host ' + host['name'])
+        self._logger.info('Added initiator %s to host %s', initiator['initiator_port'], host['name'])
+        self._logger.debug('Details of initiator %s', initiator)
          
         # Find network
-        network = self.find_iscsi_network(vipr_param['varray'], vipr_param['network'])
-        self.log_info('Found network ' + network['name'])
- 
+        network = self.find_iscsi_network(vipr_param['varray'], vipr_param['network']) 
+        if (network):
+            self._logger.info('Found network %s in virtual array %s', network['name'], varray)
+        else:
+            self._logger('Cannot find a network in virtual array %s to place the initiator', varray)
+            exit(1)
+            
         # add initiator to network
-        self.add_initiator_to_network(host, initiator, network, vipr_param['varray'])
-        self.log_info('Added initiator ' + initiator['initiator_port'] + ' to network ' + network['name'])
+        if (initiator['initiator_port'] not in network['endpoints']):
+            self.add_initiator_to_network(host, initiator, network, vipr_param['varray'])
+        self._logger.info('Added initiator %s to network %s', initiator['initiator_port'], network['name'])
+        self._logger.debug('Network details %s: ', network)
              
     def create_host(self, hostname, ostype='linux'):
         # find host
@@ -79,7 +112,7 @@ class Openstack(object):
                 ostype = "linux"
             
                 # host not found, create a new one.
-            task_rep = self.__host.host_create(hostname, None, None, hostname, ostype, None)
+            task_rep = self._host.host_create(hostname, None, None, hostname, ostype, None)
             host = common.show_by_href(self.__ipAddr, self.__port, task_rep['resource']) 
         return host                
     
@@ -94,7 +127,7 @@ class Openstack(object):
         shortname = hostname[:hostname.find(".")]
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "GET",
-                                             self.URI_HOST_SEARCH.format(hostname), 
+                                             self.URI_HOST_SEARCH.format(shortname), 
                                              None)
         o = common.json_decode(s);
         ids = []
@@ -110,7 +143,7 @@ class Openstack(object):
         for host in o['host']:
             if (host['inactive']):
                 continue
-            if (hostname in host['host_name'] or host['host_name'] in hostname ):     
+            if (hostname in host['host_name'] or host['host_name'] in hostname ):
                 return host
                
     def get_localhost_initiator(self, protocol='iSCSI'):
@@ -120,7 +153,7 @@ class Openstack(object):
             return initiator
     
     def find_initiator(self, hosturi, wwpn):
-        initiators = self.__host.host_query_initiators(hosturi)
+        initiators = self._host.host_query_initiators(hosturi)
         for initiator in initiators:
             if (initiator['name'] == wwpn):
                 return initiator
@@ -128,12 +161,8 @@ class Openstack(object):
     
     def create_initiator(self, host, connector):
         initiator = self.find_initiator(host['id'], connector['wwpn'])
-        if (not initiator):
-            # Add initiator. Support only iscsi for now.
-            if (not connector) :
-                protocol = 'iSCSI'
-                connector = self.get_localhost_initiator(protocol)
-            initiator = self.__host.host_add_initiator(host['name'], connector['wwpn'])
+        if (not initiator): 
+            initiator = self._host.host_add_initiator(host['name'], connector['wwpn'])
         return common.show_by_href(self.__ipAddr, self.__port, initiator)
     
     '''
@@ -141,19 +170,44 @@ class Openstack(object):
     '''
     def find_iscsi_network(self, varray, network_name):
         if (network_name):
-            return self.__network.search(network_name)      
-        for port in self.get_varray_iscsi_storageports(varray):
             try:
-                network = port['network']
-                # Return the first one found. 
-                # TODO: ping storage port IP to determine the network to choose.
-                return common.show_by_href(self.__ipAddr, self.__port, network)
-            except KeyError: 
+                return self._network.network_query(network_name, varray)
+            except SOSError:
+                # TODO: re-raise the exception with correct name. To be removed
+                raise SOSError(SOSError.NOT_FOUND_ERR, "Network {0} not found".format(network_name))
+            
+        storage_ports = self.get_varray_iscsi_storageports(varray)
+        for port in storage_ports:
+            port_info = dict()
+            port_info['native_guid'] = port['native_guid']
+            port_info['port_name'] = port['port_name']
+            try:
+                ip_address = port['ip_address'] 
+                port_info['ip_address'] = ip_address             
+                if (self.is_ip_pingable(ip_address)):
+                    network = port['network']
+                    network_detail = common.show_by_href(self.__ipAddr, self.__port, network)
+                    port_info['network'] = network_detail['name']
+                    self._logger.debug('Select storage port %s: ', port_info)
+                    return network_detail
+                else:    
+                    self._logger.debug('Skip storage port %s: ', port_info)
+ 
+            except KeyError:
+                self._logger.debug('Skip storage port %s: ', port_info)
                 continue
  
+    def is_ip_pingable(self, ip_address):
+        self._logger.debug('ping ip address %s ', ip_address)
+        try:
+            (out, err) = self._execute('ping', '-c', '2', ip_address)
+            self._logger.debug(out)
+            return True
+        except Exception as ex:
+            return False
     
     def get_ip_networks(self, varray):
-        networks = self.__network.list_networks(varray)
+        networks = self._network.list_networks(varray)
         ip_networks = []
         resources = self.get_bulk_details(networks, self.URI_NETWORK_BULK)                         
         for x in resources['network']:
@@ -184,7 +238,7 @@ class Openstack(object):
     '''
     def add_initiator_to_network(self, host, initiator, network, varray):
         if (network['transport_type'] == 'IP' and initiator['protocol'] == 'iSCSI'):
-            return self.__network.add_endpoint(varray, network['name'], initiator['initiator_port'])
+            return self._network.add_endpoint(varray, network['name'], initiator['initiator_port'])
     
     def get_varray_iscsi_storageports(self, varray):
         iscsi_ports = []
@@ -204,8 +258,7 @@ class Openstack(object):
             Storage ports in JSON
     """
     def get_varray_storageports(self, varray):
-        #varray_obj = VirtualArray(self.__ipAddr,self.__port)
-        networks = self.__network.list_networks(varray)
+        networks = self._network.list_networks(varray)
         ids = []
         for net in networks:
             net_id = net['id']
@@ -238,66 +291,77 @@ def add_host_parser(subcommand_parsers, common_parser):
                                 conflict_handler='resolve',
                                 help='Add Openstack compute node to ViPR')
     add_host_parser.add_argument('-v', '-verbose',
-                             dest='verbose',
-                             help='List hosts with details',
-                             action='store_true')
+                                 dest='verbose',
+                                 help='Print details for debugging',
+                                 action='store_true')
     add_host_parser.add_argument('-name', '-host_name',
-                                metavar='<hostname>',
-                                dest='hostname',
-                                help='The hostname of Openstack compute node')
+                                 metavar='<host_name>',
+                                 dest='host_name',
+                                 help='The hostname of Openstack compute node')
     add_host_parser.add_argument('-ostype', '-os',
-                                metavar='<ostype>',
-                                dest='ostype',
-                                help='The OS type of the host: linux, windows, esx, other')
+                                 metavar='<ostype>',
+                                 dest='ostype',
+                                 help='The OS type of the host: linux, windows, esx, other')
     add_host_parser.add_argument('-initiatorPort', '-wwpn',
-                                metavar='<wwpn>',
-                                dest='wwpn',
-                                help='The initiator port')
+                                 metavar='<wwpn>',
+                                 dest='wwpn',
+                                 help='The initiator port')
     add_host_parser.add_argument('-network', '-nw',
-                                metavar='<network>',
-                                dest='network',
-                                help='The ViPR network name to add the host initiators to')
+                                 metavar='<network>',
+                                 dest='network',
+                                 help='The ViPR network name to add the host initiators to')
     add_host_parser.add_argument('-varray', '-va',
-                                metavar='<varray>',
-                                dest='varray',
-                                help='The ViPR virtual array name')
+                                 metavar='<varray>',
+                                 dest='varray',
+                                 help='The ViPR virtual array name')
     add_host_parser.set_defaults(func=add_host)
 
 
 def add_host(args):
-    obj = Openstack(args.ip, args.port)
-    if (not args.hostname) :
+    obj = Openstack(args.ip, args.port, args.verbose)
+    is_localhost = False
+    if (not args.host_name) :
         hostname = obj.get_hostname()
         ostype = platform.system()
+        is_localhost = True
     else:
-        hostname = args.hostname
+        hostname = args.host_name
         ostype = args.ostype
-        
-    if (not args.wwpn):
+        if (hostname in obj.get_hostname()):
+            is_localhost = True
+            
+    if (not args.wwpn and is_localhost):
+        # support only iSCSI
         connector = obj.get_localhost_initiator()
     else:
         connector = {'wwpn' : args.wwpn}
-   
+           
+    if(args.host_name and not args.wwpn and not is_localhost):
+        raise SOSError(SOSError.CMD_LINE_ERR,
+                       "ERROR: argument -wwpn/-initiatorPort is required for %s" %(hostname))
+    
     host_param = dict()
     host_param['hostname'] = hostname
     host_param['ostype'] = ostype
-
+    host_param['is_localhost'] = is_localhost
+    if (args.verbose):
+        obj.get_logger().debug('Host parameters: %s', host_param)
     vipr_param = dict()
-    if (not args.varray):
-        viprinfo = VIPRINFO(obj.VIPR_CONFIG_FILE)
-        varray = viprinfo['varray']
-    else:
-        varray = args.varray
-    vipr_param['varray'] = varray
+    viprinfo = _viprinfo._get_vipr_info(obj.VIPR_CONFIG_FILE)
+    vipr_param['varray'] = args.varray if args.varray else viprinfo['varray']
     vipr_param['network'] = args.network
-    
+    vipr_param['port'] = args.port if args.port else viprinfo['port']
+    vipr_param['hostname'] = args.ip if args.ip else viprinfo['FQDN'] 
+    if (args.verbose):
+        obj.get_logger().debug('ViPR parameters: %s', vipr_param)
+        
     try:
         host = obj.add_host(host_param, connector, vipr_param)
         return host          
     except SOSError as e:
-        raise e
+        obj.get_logger().error(e.err_text)
+        sys.exit(e.err_code)
     
-
 # Host Main parser routine
 def openstack_parser(parent_subparser, common_parser):
     # main host parser
