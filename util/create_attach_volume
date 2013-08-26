@@ -10,7 +10,7 @@
 DATE=`date "+%m%d%Y%H%M"`
 #MNT="/dev/vdc"
 MNT="auto"
-VOLUMETYPE="ViPR High Performance"
+VOLUMEIDTYPE="ViPR High Performance"
 NAMESUFFIX="openstack-${HOSTNAME}-${DATE}"
 VOLNAME="volume-${NAMESUFFIX}"
 CLONENAME="clone-${NAMESUFFIX}"
@@ -24,7 +24,7 @@ INSTNAME="instance-${DATE}"
 IMAGE=$( nova image-list | grep "cirros-0.3.1-x86_64-uec " | tr -s ' '| cut -f2 -d' ')
 
 # Create the volume
-cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMETYPE}" 1
+cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMEIDTYPE}" 1
 cinder list
 
 echo "Waiting for volume '${VOLNAME}' to be created"
@@ -37,14 +37,14 @@ done
 echo "*** volume is now available"
 
 #get the volume id
-VOLUME=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f2 -d' ')
+VOLUMEID=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f2 -d' ')
 
 
 read -p "do you want to create a snapshot as well as clone the volume? [N/y] " DOSNAPCLONE
 if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
     # create a snapshot
     echo "Creating a snapshot"
-    cinder snapshot-create --display-name "${SNAPNAME}" "${VOLUME}"
+    cinder snapshot-create --display-name "${SNAPNAME}" "${VOLUMEID}"
     echo "Waiting for snapshot '${SNAPNAME}' to be created"
     STATUS="unknown"
     while [ "${STATUS}" != "available" ]; do
@@ -56,7 +56,7 @@ if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
 
     # create a clone
     echo "Creating a clone"
-    cinder create --source-volid "${VOLUME}" --display-name "${CLONENAME}" 1
+    cinder create --source-volid "${VOLUMEID}" --display-name "${CLONENAME}" 1
     echo "Waiting for clone '${CLONENAME}' to be created"
     STATUS="unknown"
     while [ "${STATUS}" != "available" ]; do
@@ -88,15 +88,15 @@ if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    INSTANCE=$( nova list | grep "${INSTNAME}" | tr -s ' '  | cut -f2 -d' ')
 
    # ok, now attach the volume
-   nova volume-attach ${INSTANCE} ${VOLUME} ${MNT}
+   nova volume-attach ${INSTANCE} ${VOLUMEID} ${MNT}
 
    # we'll know a volume is attached if we run 'cinder list'
-   # and one line contains the VOLUMEID and the word "in-use"
+   # and one line contains the VOLUMEIDID and the word "in-use"
    echo "Waiting for volume to be attached"
    STATUS="unknown"
    while [ "${STATUS}" != "in-use" ]; do
       sleep 5
-      STATUS=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f4 -d' ')
+      STATUS=$( cinder list | grep "${VOLUMEID}" | tr -s ' ' | cut -f4 -d' ')
    done
 fi
 
@@ -105,7 +105,7 @@ read -p "do you want to copy an image to a volume and then copy it back as anoth
 if [ "${DOIMAGE}" == "y" -o "${DOIMAGE}" == "Y" ]; then
     echo "Copying image '${IMAGENAME}' to volume '${IMAGEVOLNAME}' ..."
     IMAGEID=$( glance image-list | grep " ${IMAGENAME} " | tr -s ' ' | cut -f2 -d' ')
-    cinder create --display-name "${IMAGEVOLNAME}" --volume-type "${VOLUMETYPE}" --image-id "${IMAGEID}" 1
+    cinder create --display-name "${IMAGEVOLNAME}" --volume-type "${VOLUMEIDTYPE}" --image-id "${IMAGEID}" 1
     echo "Waiting for volume '${IMAGEVOLNAME}' to be created..."
     STATUS="unknown"
     while [ "${STATUS}" != "available" ]; do
@@ -134,13 +134,13 @@ read -p "Press [Enter] to continue and delete all created volumes, snapshot, ima
 if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    # detach the volume
    echo "*** detaching the volume"
-   nova volume-detach ${INSTANCE} ${VOLUME}
+   nova volume-detach ${INSTANCE} ${VOLUMEID}
    # and wait for it to become available
    echo "Waiting for volume '${VOLNAME}' to be detached"
    STATUS="unknown"
    while [ "${STATUS}" != "available" ]; do
       sleep 5
-      STATUS=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f4 -d' ')
+      STATUS=$( cinder list | grep "${VOLUMEID}" | tr -s ' ' | cut -f4 -d' ')
    done
    
    # and the instance
@@ -194,11 +194,11 @@ fi
 
 # now delete the volume
 echo "*** deleting the volume"
-cinder delete $VOLUME
+cinder delete $VOLUMEID
 echo "Waiting for volume to be deleted"
 STATUS="unknown"
 while [ "${STATUS}" != "0" ]; do
    sleep 5
-   STATUS=$( cinder list | grep "${VOLUME}" | wc -l )
+   STATUS=$( cinder list | grep "${VOLUMEID}" | wc -l )
 done
 
