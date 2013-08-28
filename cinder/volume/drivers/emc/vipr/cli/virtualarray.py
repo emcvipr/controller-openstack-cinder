@@ -165,7 +165,7 @@ class VirtualArray(object):
 
         body = json.dumps(parms)
 
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT", 
                                              self.URI_VIRTUALARRAY_ACLS.format(uri),
                                              body)
 	

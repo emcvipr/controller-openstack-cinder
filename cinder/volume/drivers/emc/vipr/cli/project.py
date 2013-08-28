@@ -430,7 +430,7 @@ def update_project_parser(subcommand_parsers, common_parser):
 def update_project(args):
     
     if(args.newname is None and args.newowner is None):
-        raise SOSError(SOSError.CMD_LINE_ERR, "soscli project update: error: at least one of " + 
+        raise SOSError(SOSError.CMD_LINE_ERR, "viprcli project update: error: at least one of " + 
                        "the arguments -np/-newname -o/-newowner is required")
     obj = Project(args.ip, args.port)
     try:

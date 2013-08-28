@@ -40,7 +40,9 @@ class Authentication(object):
     URI_LOGOUT                      = URI_SERVICES_BASE + '/logout'
 
     HEADERS = {'Content-Type': 'application/json', 'ACCEPT': 'application/json', 'X-EMC-REST-CLIENT': 'TRUE'}
-    
+    SEARCH_SCOPE=['ONELEVEL','SUBTREE']
+    BOOL_VALS=['true','false']
+
     def __init__(self, ipAddr, port):
         '''
         Constructor: takes IP address and port of the ViPR instance. 
@@ -236,7 +238,7 @@ class Authentication(object):
 
 
     def add_authentication_provider(self, mode , url, certificate, managerdn, managerpwd, searchbase, searchfilter, searchkey, groupattr, 
-				    name, domains, whitelist):
+				    name, domains, whitelist, searchscope, description, disable, validatecertificate, maxpagesize):
         '''
 	Makes REST API call to add authentication provider
         specified user after validation.
@@ -246,21 +248,32 @@ class Authentication(object):
 	whitelist_array=[]
         whitelist_array = whitelist.split(',')
 
+	domainlist_array=[]
+	domainlist_array = domains.split(',')
+
+	urlslist_array=[]
+	urlslist_array = url.split(',')
+
         parms = { 'mode' : mode,
-                 'server_urls' : [ url ],
+                 'server_urls' : urlslist_array,
                  'server_cert' : certificate,
                  'manager_dn' : managerdn,
                  'manager_password' : managerpwd,
                  'search_base' :searchbase,
                  'search_filter' : searchfilter,
                  'search_attribute_key' : searchkey,
+		 'search_scope' : searchscope,
                  'group_attribute' : groupattr,
                  'name' : name,
-		 'domains' : [domains],
+                 'description' : description,
+                 'disable' : disable,
+		 'max_page_size' : maxpagesize,
+		 'validate_certificates' : validatecertificate,
+		 'domains' : domainlist_array,
                  'group_whitelist_values' : whitelist_array}
 
-        body = json.dumps(parms)
 
+        body = json.dumps(parms)
 
 	(s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
                                              Authentication.URI_VDC_AUTHN_PROFILE,
@@ -320,7 +333,26 @@ class Authentication(object):
 	         #   profile = self.show_authentication_provider_by_uri(pr['id'], xml)
                   #  return  common.format_xml(profile)
 		return profile
+	
+	raise SOSError(SOSError.NOT_FOUND_ERR, "Authentication Provider with name '" +name+ "' not found")
 		
+
+    def delete_authentication_provider(self, name):
+        '''
+        Makes REST API call to delete authentication provider
+        Returns:
+            SUCCESS OR FAILURE
+        '''
+	uri = self.query_authentication_provider(name)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "DELETE",
+                        Authentication.URI_VDC_AUTHN_PROFILES.format(uri), None)
+
+        return str(s) + " ++ " + str(h)
+
+
+
+
 
 
 
@@ -346,7 +378,12 @@ class Authentication(object):
 
 
 
-    def update_authentication_provider(self, cert, name):
+    def update_authentication_provider(self, mode , add_urls, remove_urls, certificate, 
+					managerdn, managerpwd, searchbase, searchfilter, 
+					searchkey, groupattr, name, add_domains, 
+					remove_domains, add_whitelist, remove_whitelist, 
+					searchscope, description, disable, 
+					validatecertificate, maxpagesize):
         '''
         Makes REST API call to generate the cookiefile for the 
         specified user after validation.
@@ -354,25 +391,80 @@ class Authentication(object):
             SUCCESS OR FAILURE
 	'''
 
-	parms = { 'server_cert' : cert }
+	authnprov_id  = self.query_authentication_provider(name)
 
-	if(name):
-	    uri = self.query_authentication_provider(name)
-            body = json.dumps(parms)
+        server_assignments = dict()
+        domain_assignments = dict()
+        whitelist_assignments = dict()
 
-	    (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
-                                             Authentication.URI_VDC_AUTHN_PROFILES.format(uri),
+        urls = dict();
+        domains = dict();
+        whitelist = dict();
+
+	urls['add'] = []
+        for iter in add_urls:
+	    if(iter is not ""):
+                urls['add'].append(iter)
+
+	urls['remove'] = []
+        for iter in remove_urls:
+	    if(iter is not ""):
+                urls['remove'].append(iter)
+
+	domains['add'] = []
+        for iter in add_domains:
+	    if(iter is not ""):
+                domains['add'].append(iter)
+
+	domains['remove'] = []
+        for iter in remove_domains:
+	    if(iter is not ""):
+                domains['remove'].append(iter)
+
+	whitelist['remove'] = []
+        for iter in remove_whitelist:
+	    if(iter is not ""):
+                whitelist['remove'].append(iter)
+
+	whitelist['add'] = []
+        for iter in add_whitelist:
+	    if(iter is not ""):
+                whitelist['add'].append(iter)
+
+        '''for domain in add_domains:
+                domainlist.append({'domain': domain})
+            domains['add'] = domainlist #add_domains'''
+
+
+        parms = { 'mode' : mode,
+                 'manager_dn' : managerdn,
+                 'manager_password' : managerpwd,
+                 'search_base' :searchbase,
+                 'search_filter' : searchfilter,
+                 'search_attribute_key' : searchkey,
+                 'search_scope' : searchscope,
+                 'group_attribute' : groupattr,
+                 'name' : name,
+                 'description' : description,
+                 'disable' : disable,
+                 'max_page_size' : maxpagesize,
+                 'validate_certificates' : validatecertificate}
+
+
+	if( (len(urls['add']) > 0) or (len(urls['remove'])>0) ):
+	    parms['server_url_changes'] = urls
+
+	if( (len(domains['remove']) > 0) or (len(domains['add'])>0) ):
+	    parms['domain_changes'] = domains
+
+	if( (len(whitelist['add']) > 0) or (len(whitelist['remove'])>0) ):
+	    parms['group_whitelist_value_changes'] = whitelist
+
+        body = json.dumps(parms)
+	
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
+                                             Authentication.URI_VDC_AUTHN_PROFILES.format(authnprov_id),
                                              body)
-	else:
-            uris = self.list_authentication_provider()
-
-            for uri in uris:
-                body = json.dumps(parms)
-
-	        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "PUT",
-                                             Authentication.URI_VDC_AUTHN_PROFILES.format(uri['id']),
-                                             body)
-
 
 
 
@@ -452,12 +544,14 @@ def add_authentication_provider(args):
         config.readfp(inif)
 	sectionslst = config.sections()
 	
+	if(len(sectionslst) == 0):
+	    raise SOSError(SOSError.NOT_FOUND_ERR,
+                            "Authentication Provider configuration file is empty")
+
 	for sectioniter in sectionslst:
 	    mode = config.get(sectioniter, "mode")
             url = config.get(sectioniter, "url")
-            certificate = config.get(sectioniter, 'certificate')
             managerdn = config.get(sectioniter, 'managerdn')
-            #passwd_user = config.get(sectioniter, 'passwd_user')
             searchbase = config.get(sectioniter, 'searchbase')
             searchfilter = config.get(sectioniter, 'searchfilter')
             searchkey = config.get(sectioniter, 'searchkey')
@@ -465,26 +559,54 @@ def add_authentication_provider(args):
             name = config.get(sectioniter, 'name')
             domains = config.get(sectioniter, 'domains')
             whitelist = config.get(sectioniter, 'whitelist')
+            description = config.get(sectioniter, 'description')
+	    searchscope = config.get(sectioniter, 'searchscope')
 
-	    if sys.stdin.isatty():
-                passwd_user = getpass.getpass(prompt="Password for "+name+": ")
-            else:
-                passwd_user = sys.stdin.readline().rstrip()
+	    validatecertificate =  config.get(sectioniter, 'validatecertificate')
+	    maxpagesize = config.get(sectioniter, 'maxpagesize')
+            disable = config.get(sectioniter, 'disable')
+	
+	    if(domains is "") or (whitelist is "") or (url is "") or (managerdn is "") or \
+	      (searchbase is "") or (searchfilter is "")  or \
+	      (searchkey is "") or (groupattr is "") or (name is "") or (description is "") or (searchscope is "") or (mode is ""):
+     		raise SOSError(SOSError.VALUE_ERR, "domains,"+ 
+			"whitelist,url,managerdn,"+ 
+			"searchbase,searchfilter,searchkey,groupattr," +
+			"name,description,searchscope and mode can not be empty")
 
-            res = obj.add_authentication_provider(mode, url, certificate, managerdn, passwd_user, 
+            defined_and_valid_value('search scope', searchscope , Authentication.SEARCH_SCOPE)
+            defined_and_valid_value('disable', disable , Authentication.BOOL_VALS)
+            defined_and_valid_value('validatecertificate', validatecertificate , Authentication.BOOL_VALS)
+
+	    passwd_user = common.get_password(name)
+
+            res = obj.add_authentication_provider(mode, url, None, managerdn, passwd_user, 
 					     searchbase, searchfilter, searchkey,
-					     groupattr,  name, domains, whitelist)
+					     groupattr,  name, domains, whitelist, searchscope, description, disable, validatecertificate, maxpagesize)
 
-        return res
 
     except IOError as e:
-        raise SOSError(SOSError.NOT_FOUND_ERR,
-                            "Authentication Provider create failed: config provider with name " + args.configfile
-                            +" not found")
+	common.format_err_msg_and_raise("add", "authentication provider", e[1], e.errno)
 
     except SOSError as e:
-	raise e
+	common.format_err_msg_and_raise("add", "authentication provider", e.err_text, e.err_code)
+
+    except ConfigParser.NoOptionError as e:
+	common.format_err_msg_and_raise("add", "authentication provider", str(e) , SOSError.NOT_FOUND_ERR)
+
+    except (ConfigParser.ParsingError, ConfigParser.Error) as  e:
+	common.format_err_msg_and_raise("add", "authentication provider", str(e) , SOSError.VALUE_ERR)
+
         
+
+def delete_authentication_provider(args):
+    obj = Authentication(args.ip, args.port)
+    try:
+        res = obj.delete_authentication_provider(args.name)
+    except SOSError as e:
+        common.format_err_msg_and_raise("delete", "Authentication Provider", e.err_text, e.err_code)
+
+
 
 
 def show_authentication_provider(args):
@@ -493,18 +615,81 @@ def show_authentication_provider(args):
         res = obj.show_authentication_provider(args.name, args.xml)
 	return common.format_json_object(res)
     except SOSError as e:
-        raise e
-
+        common.format_err_msg_and_raise("show", "Authentication Provider", e.err_text, e.err_code)
 
 
 def update_authentication_provider(args):
     obj = Authentication(args.ip, args.port)
     try:
-        res = obj.update_authentication_provider(args.certificate, args.name)
-        return res
-    except SOSError as e:
-        raise e
+	# read authentication provider  parameters from configuration file
+        config = ConfigParser.RawConfigParser()
+        inif = open(args.configfile, 'rb')
+        config.readfp(inif)
+	sectionslst = config.sections()
+	
+	if(len(sectionslst) == 0):
+	    raise SOSError(SOSError.NOT_FOUND_ERR,
+                            "Authentication Provider configuration file is empty")
 
+	for sectioniter in sectionslst:
+	    mode = config.get(sectioniter, "mode")
+
+            add_urls = config.get(sectioniter, "add-urls")
+            remove_urls = config.get(sectioniter, "remove-urls")
+            add_domains = config.get(sectioniter, 'add-domains')
+            remove_domains = config.get(sectioniter, 'remove-domains')
+            add_whitelist = config.get(sectioniter, 'add-whitelist')
+            remove_whitelist = config.get(sectioniter, 'remove-whitelist')
+
+            managerdn = config.get(sectioniter, 'managerdn')
+            searchbase = config.get(sectioniter, 'searchbase')
+            searchfilter = config.get(sectioniter, 'searchfilter')
+            searchkey = config.get(sectioniter, 'searchkey')
+            groupattr = config.get(sectioniter, 'groupattr')
+            name = config.get(sectioniter, 'name')
+            description = config.get(sectioniter, 'description')
+	    searchscope = config.get(sectioniter, 'searchscope')
+
+	    
+	    validatecertificate =  config.get(sectioniter, 'validatecertificate')
+	    maxpagesize = config.get(sectioniter, 'maxpagesize')
+            disable = config.get(sectioniter, 'disable')
+	
+
+	    defined_and_valid_value('search scope', searchscope , Authentication.SEARCH_SCOPE)
+	    defined_and_valid_value('disable', disable , Authentication.BOOL_VALS)
+	    defined_and_valid_value('validatecertificate', validatecertificate , Authentication.BOOL_VALS)
+
+	    passwd_user = common.get_password(name)
+
+            res = obj.update_authentication_provider(mode, add_urls.split(','), remove_urls.split(','), 
+					     None, managerdn, passwd_user, 
+					     searchbase, searchfilter, searchkey,
+					     groupattr, name, add_domains.split(','), remove_domains.split(','), 
+					     add_whitelist.split(','), remove_whitelist.split(','), searchscope, 
+					     description, disable, validatecertificate, maxpagesize)
+
+
+    except IOError as e:
+	common.format_err_msg_and_raise("update", "authentication provider", e[1], e.errno)
+
+    except SOSError as e:
+	common.format_err_msg_and_raise("update", "authentication provider", e.err_text, e.err_code)
+
+    except ConfigParser.NoOptionError as e:
+        common.format_err_msg_and_raise("update", "authentication provider", str(e) , SOSError.NOT_FOUND_ERR)
+
+    except (ConfigParser.ParsingError, ConfigParser.Error) as e:
+        common.format_err_msg_and_raise("update", "authentication provider", str(e) , SOSError.VALUE_ERR)
+  
+
+
+
+def defined_and_valid_value(fieldname, value, valid_list):
+    if( (value) and (value not in valid_list) ):
+                raise SOSError(SOSError.VALUE_ERR,
+                       fieldname+ "can take values from among"+  str(valid_list) )
+	
 
 def list_authentication_provider(args):
     obj = Authentication(args.ip, args.port)
@@ -601,7 +786,7 @@ def logout_parser(parent_subparser, sos_ip, sos_port):
     logout_parser = parent_subparser.add_parser('logout',
                                 description='ViPR authentication CLI usage',
                                 conflict_handler='resolve',
-                                help='Authenticate ViPR user')
+                                help='Logout ViPR user')
     logout_parser.add_argument('-cf', '-cookiefile',
                 metavar='<cookiefile>',
                                 help='filename for storing cookie information',
@@ -626,12 +811,9 @@ def add_auth_provider_parser(subcommand_parsers , common_parser):
     # add command parser
     add_auth_provider_parser = subcommand_parsers.add_parser('add-provider',
                                 description='ViPR Authentication Provider Add CLI usage.',
+				parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Add a Authentication Provider')
-
-    mandatory_args = add_auth_provider_parser.add_argument_group('mandatory arguments')
-
-
 
     mandatory_args = add_auth_provider_parser.add_argument_group('mandatory arguments')
 
@@ -676,7 +858,7 @@ def show_auth_provider_parser(subcommand_parsers, common_parser):
 
 def update_auth_provider_parser(subcommand_parsers, common_parser):
     # update command parser
-    update_auth_provider_parser = subcommand_parsers.add_parser('update-certificate',
+    update_auth_provider_parser = subcommand_parsers.add_parser('update',
                                 description='ViPR Authentication Provider Update CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
@@ -685,19 +867,35 @@ def update_auth_provider_parser(subcommand_parsers, common_parser):
     mandatory_args = update_auth_provider_parser.add_argument_group('mandatory arguments')
 
 
-
-    mandatory_args.add_argument('-certificate',
-	              		metavar='<certificate>',
-                                help='certificate',
-                		dest='certificate',
+    mandatory_args.add_argument('-configfile',
+                		 metavar='<configfile>',
+                                help='config file for authentication provider',
+                		dest='configfile',
 				required=True)
 
-    update_auth_provider_parser.add_argument('-name',
-	              		metavar='<name>',
-                                help='name',
-                		dest='name')
-
     update_auth_provider_parser.set_defaults(func=update_authentication_provider)
+
+
+
+def delete_auth_provider_parser(subcommand_parsers, common_parser):
+    # delete command parser
+    delete_auth_provider_parser = subcommand_parsers.add_parser('delete-provider',
+                                description='ViPR Authentication Provider delete CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Delete an Authentication Provider')
+
+    mandatory_args = delete_auth_provider_parser.add_argument_group('mandatory arguments')
+
+    mandatory_args.add_argument('-name',
+                                metavar='<name>',
+                                help='name of the authentication provider',
+                                dest='name')
+
+    delete_auth_provider_parser.set_defaults(func=delete_authentication_provider)
+
+
+
 
 
 def list_auth_provider_parser(subcommand_parsers, common_parser):
@@ -734,7 +932,6 @@ def add_vdc_role_parser(subcommand_parsers , common_parser):
     mandatory_args = add_vdc_role_parser.add_argument_group('mandatory arguments')
 
     mandatory_args.add_argument('-role',
-                                 metavar='<role>',
                                 help='role to be added',
                                 dest='role',
                                 required=True,
@@ -771,9 +968,10 @@ def add_vdc_role(args):
 def list_vdc_role_parser(subcommand_parsers , common_parser):
     # add command parser
     list_vdc_role_parser = subcommand_parsers.add_parser('list-vdc-role',
-                                description='ViPR Add vdc Role CLI usage.',
+                                description='ViPR List vdc Roles CLI usage.',
+                                parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Add a vdc role to an user')
+                                help='List Vdc Roles')
 
 
     list_vdc_role_parser.set_defaults(func=list_vdc_role)
@@ -798,9 +996,10 @@ def list_vdc_role(args):
 def delete_role_parser(subcommand_parsers, common_parser):
     # register command parser
     delete_role_parser = subcommand_parsers.add_parser('delete-role',
-                                description='ViPR Storagepool update CLI usage.',
+                                description='ViPR delete Vdc role CLI usage.',
                                 parents=[common_parser],
-                                conflict_handler='resolve')
+                                conflict_handler='resolve',
+                                help='Delete a vdc role of an user')
 
 
 
@@ -860,6 +1059,8 @@ def authentication_parser(parent_subparser, common_parser):
     show_auth_provider_parser(subcommand_parsers , common_parser)
 
     update_auth_provider_parser(subcommand_parsers , common_parser)
+
+    delete_auth_provider_parser(subcommand_parsers , common_parser)
 
     list_auth_provider_parser(subcommand_parsers , common_parser)
 

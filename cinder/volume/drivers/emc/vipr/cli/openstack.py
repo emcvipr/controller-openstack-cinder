@@ -104,7 +104,7 @@ class Openstack(object):
         self._logger.info('Added initiator %s to network %s', initiator['initiator_port'], network['name'])
         self._logger.debug('Network details %s: ', network)
              
-    def create_host(self, hostname, ostype='linux'):
+    def create_host(self, hostname, ostype='Linux'):
         # find host
         host = self.find_host(hostname)
         if (not host):

@@ -273,7 +273,7 @@ class StoragePool(object):
         o = common.json_decode(s)
 
         return o
-    def storagepool_update_by_uri(self, pooluri, varrays, maxresources):
+    def storagepool_update_by_uri(self, pooluri, varrays, maxresources, maxpoolutilization, maxthinpoolsubscription):
         '''
         Updates a storagepool
         '''
@@ -282,6 +282,12 @@ class StoragePool(object):
 
         if (maxresources):
             parms['max_resources'] = maxresources
+
+        if (maxpoolutilization):
+            parms['max_pool_utilization_percentage'] = maxpoolutilization
+
+        if (maxthinpoolsubscription):
+            parms['max_thin_pool_subscription_percentage'] = maxthinpoolsubscription
 
 	if( varrays ):
             parms['varray_assignment_changes'] = varrays
@@ -294,7 +300,7 @@ class StoragePool(object):
         o = common.json_decode(s)
         return o
 
-    def storagepool_update(self, storagesystem, serialnumber, devicetype, poolname, nhadds, nhrems, volumetype, maxresources):
+    def storagepool_update(self, storagesystem, serialnumber, devicetype, poolname, nhadds, nhrems, volumetype, maxresources, maxpoolutilization, maxthinpoolsubscription):
 
  	nhassignments = dict();
         #parms['varray_assignment_changes'] = nhassignments
@@ -342,15 +348,15 @@ class StoragePool(object):
 	    if(poolname):
 	        if(storpool['pool_name'] == poolname):
 		    if ( (volumetype) and (storpool['supported_volume_types'] == volumetype) ):
-                    	self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
+                    	self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources, maxpoolutilization, maxthinpoolsubscription ) 
 		    if (not volumetype):
-                    	self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
+                    	self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources, maxpoolutilization, maxthinpoolsubscription ) 
 
 	    else:
 		if (not volumetype):
-                    self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
+                    self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources,  maxpoolutilization, maxthinpoolsubscription) 
 		if ( (volumetype) and (storpool['supported_volume_types'] == volumetype) ):
-                    self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources) 
+                    self.storagepool_update_by_uri(storpool['id'], nhassignments, maxresources,  maxpoolutilization, maxthinpoolsubscription) 
 		
         
 
@@ -1126,7 +1132,18 @@ def update_parser(subcommand_parsers, common_parser):
                                 help = 'Maximum number of resources',
                                 dest='maxresources',
                                 metavar='maxresources')
+
+
+    update_parser.add_argument('-maxpoolutilization','-mpu',
+                                help = 'Maximum pool utilization',
+                                dest='maxpoolutilization',
+                                metavar='<maxpoolutilization>')
 				
+    update_parser.add_argument('-maxthinpoolsubscription','-mtps',
+                                help = 'Maximum thin pool subscription',
+                                dest='maxthinpoolsubscription',
+                                metavar='<maxthinpoolsubscription>')
+
     update_parser.add_argument('-volumetype',
                                 help = 'volume types to be associated with',
                                 dest='volumetype',
@@ -1139,7 +1156,17 @@ def storagepool_update(args):
     obj = StoragePool(args.ip, args.port)
     
     try:
-        res = obj.storagepool_update(args.storagesystem, args.serialnumber, args.type, args.name, args.nhadd, args.nhrem , args.volumetype, args.maxresources)
+	if( args.maxpoolutilization ):
+	    if ( (int(args.maxpoolutilization) > 100) or (int(args.maxpoolutilization) < 0) ) :
+	        print "Please ensure max pool utilization is >=0 and <=100"
+	        return
+	if(args.maxthinpoolsubscription):
+	    if( 0 > int(args.maxthinpoolsubscription) ):
+	        print "Please ensure max thin pool subscription is >=0"
+	        return
+
+        res = obj.storagepool_update(args.storagesystem, args.serialnumber, args.type, args.name, args.nhadd, args.nhrem , args.volumetype, args.maxresources, args.maxpoolutilization, args.maxthinpoolsubscription)
+
     except SOSError as e:
         if( e.err_code == SOSError.NOT_FOUND_ERR):
             raise SOSError(SOSError.NOT_FOUND_ERR, 

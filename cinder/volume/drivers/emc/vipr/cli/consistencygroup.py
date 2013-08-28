@@ -141,7 +141,7 @@ class ConsistencyGroup(object):
             else:
                 raise e
         if(status):
-            common.print_err_msg_and_exit("create", "consistency group",
+            common.format_err_msg_and_raise("create", "consistency group",
                                           "consistency groupwith name: " + name + " already exists",
                                           SOSError.ENTRY_ALREADY_EXISTS_ERR)
 
@@ -425,7 +425,7 @@ def consistencygroup_create(args):
         obj = ConsistencyGroup(args.ip, args.port)
         res = obj.create(args.name, args.project, args.tenant)
     except SOSError as e:
-        common.print_err_msg_and_exit("create", "consistency group", e.err_text, e.err_code)
+        common.format_err_msg_and_raise("create", "consistency group", e.err_text, e.err_code)
 
 # Consistency Group Create routines
 

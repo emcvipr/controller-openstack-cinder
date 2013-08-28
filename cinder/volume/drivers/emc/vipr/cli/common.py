@@ -26,6 +26,7 @@ from requests.exceptions import TooManyRedirects
 from requests.exceptions import Timeout
 import cookielib
 import xml.dom.minidom
+import getpass
 from xml.etree import ElementTree
 import ConfigParser
 
@@ -252,7 +253,7 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
                 if isinstance(error_msg, unicode):
                     error_msg = error_msg.encode('utf-8')
             raise SOSError(SOSError.HTTP_ERR, "HTTP code: " + str(response.status_code) + 
-                           ", Reason: " + response.reason + " [" + error_msg + "]")
+                                                            ", "+ response.reason + " [" + error_msg + "]")
 
     except (SOSError, socket.error, SSLError, 
             ConnectionError, TooManyRedirects, Timeout) as e:
@@ -319,7 +320,10 @@ def validate_port_number(string):
     '''
     Checks whether the given string is a valid port number
     '''
-    value = int(string)
+    try:
+        value = int(string)
+    except ValueError as e:
+        return False
     
     if(value >= 0 and value <= 65535):
         return True
@@ -612,23 +616,21 @@ def _get_vipr_info(filename):
 #This method defines the standard and consistent error message format
 #for all CLI error messages. 
 #
-#Use it for any error message to be displayed
+#Use it for any error message to be formatted
 '''
 @operationType create, update, add, etc
 @component storagesystem, filesystem, vpool, etc
 @errorCode Error code from the API call
 @errorMessage Detailed error message
 '''
-def print_err_msg_and_exit(operationType, component, errorMessage, errorCode):
-    print "Error: Failed to "+operationType+" "+component
+def format_err_msg_and_raise(operationType, component, errorMessage, errorCode):
+    formatedErrMsg =  "Error: Failed to "+operationType+" "+component
     if(errorMessage.startswith("\"\'") and errorMessage.endswith("\'\"")):
         #stripping the first 2 and last 2 characters, which are quotes.
-        print errorMessage[2:len(errorMessage)-2]
-    else:
-        print errorMessage
+        errorMessage  = errorMessage[2:len(errorMessage)-2]
     
-    #Mark the status code and exit
-    exit_gracefully(errorCode)
+    formatedErrMsg = formatedErrMsg+"\nReason:"+errorMessage
+    raise SOSError(errorCode, formatedErrMsg)
 
 '''
 Terminate the script execution with status code.
@@ -640,7 +642,60 @@ exit_status_code = integer greater than zero, abnormal termination
 def exit_gracefully(exit_status_code):
     sys.exit(exit_status_code)
     
+
+'''
+Reads the password from the standard console
+TODO : Use this method to read the password throught the CLI module
+'''
+def get_password(componentName):
+        if sys.stdin.isatty():
+            passwd = getpass.getpass(prompt="Enter password of the "+componentName+": ")
+        else:
+            passwd = sys.stdin.readline().rstrip()
+                
+        if (len(passwd) > 0):
+            if sys.stdin.isatty():
+                confirm_passwd = getpass.getpass(prompt="Retype password: ")
+            else:
+                confirm_passwd = sys.stdin.readline().rstrip()
+            if (confirm_passwd != passwd):
+                raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
+                        " " + sys.argv[2] + ": error: Passwords mismatch")
+        else:
+            raise SOSError(SOSError.CMD_LINE_ERR, sys.argv[0] + " " + sys.argv[1] + 
+                           " " + sys.argv[2] + ": error: Invalid password")
+        
+        return passwd
     
+
+'''
+Given the project name and component name, the search will be performed to find
+if the component with the given name exists or not. If found, the uri of the component
+will be returned
+'''
+def search_by_project_and_name(projectName, componentName, searchUri, ipAddr, port):
+        
+        #check if the URI passed has both project and name parameters
+        strUri = str(searchUri)
+        if(strUri.__contains__("search") and strUri.__contains__("?project={0}&name={1}")):
+            #Get the project URI
+            from project import Project
+            proj_obj = Project(ipAddr, port)
+            project_uri  = proj_obj.project_query(projectName)
+        
+            (s, h) = service_json_request(ipAddr, port, "GET", searchUri.format(project_uri, componentName), None)
+        
+            o = json_decode(s)
+            if not o:
+                return None
+        
+            resources = get_node_value(o, "resource")
+            if(len(resources)>0):
+                component_uri = resources[0]['id']
+                return component_uri    
+        else:
+            raise SOSError(SOSError.VALUE_ERR, "Search URI "+strUri+" is not in the expected format, it should end with ?project={0}&name={1}")
+        
 
 class SOSError(Exception):
     '''

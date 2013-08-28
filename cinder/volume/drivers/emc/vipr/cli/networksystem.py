@@ -28,6 +28,8 @@ class Networksystem(object):
     URI_NETWORKSYSTEM_FCENDPOINTS         = URI_NETWORKSYSTEMS  + '/{0}/fc-endpoints'
     URI_NETWORKSYSTEM_VDCREFERENCES = URI_NETWORKSYSTEMS + '/san-references/{0},{1}'
     URI_RESOURCE_DEACTIVATE      = '{0}/deactivate'
+    URI_NETWORKSYSTEM_REGISTER             = URI_NETWORKSYSTEMS  + '/{0}/register'
+    URI_NETWORKSYSTEM_DEREGISTER           = URI_NETWORKSYSTEMS  + '/{0}/deregister'
 	
 
 
@@ -171,6 +173,34 @@ class Networksystem(object):
                                              None)
         return str(s) + " ++ " + str(h)
     
+
+    def networksystem_register(self, label):
+        '''
+        Makes a REST API call to delete a networksystem by its UUID
+        '''
+        uri = self.networksystem_query(label)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+					     Networksystem.URI_NETWORKSYSTEM_REGISTER.format(uri),
+                                             None)
+        o = common.json_decode(s)
+
+	return o
+
+
+    def networksystem_deregister(self, label):
+        '''
+        Makes a REST API call to delete a networksystem by its UUID
+        '''
+        uri = self.networksystem_query(label)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+					     Networksystem.URI_NETWORKSYSTEM_DEREGISTER.format(uri),
+                                             None)
+        o = common.json_decode(s)
+
+	return o
+
 
     def networksystem_discover(self, label):
 	'''
@@ -580,6 +610,60 @@ def networksystem_list(args):
         raise e
 
 
+def register_parser(subcommand_parsers, common_parser):
+    # show command parser
+    register_parser = subcommand_parsers.add_parser('register',
+                                description='ViPR Networksystem register CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Register a Networksystem')
+
+    mandatory_args = register_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                                help='name of Networksystem',
+                                dest='name',
+                                metavar='networksystemname',
+                                required=True)
+
+    register_parser.set_defaults(func=networksystem_register)
+
+def networksystem_register(args):
+    obj = Networksystem(args.ip, args.port)
+    try:
+        res = obj.networksystem_register(args.name)
+
+        return common.format_json_object(res)
+    except SOSError as e:
+	common.format_err_msg_and_raise("register", "networksystem", e.err_text, e.err_code)
+
+
+def deregister_parser(subcommand_parsers, common_parser):
+    # show command parser
+    deregister_parser = subcommand_parsers.add_parser('deregister',
+                                description='ViPR Networksystem deregister CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Deregister a Networksystem')
+
+    mandatory_args = deregister_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                                help='name of Networksystem',
+                                dest='name',
+                                metavar='networksystemname',
+                                required=True)
+
+    deregister_parser.set_defaults(func=networksystem_deregister)
+
+def networksystem_deregister(args):
+    obj = Networksystem(args.ip, args.port)
+    try:
+        res = obj.networksystem_deregister(args.name)
+
+        return common.format_json_object(res)
+    except SOSError as e:
+	common.format_err_msg_and_raise("deregister", "networksystem", e.err_text, e.err_code)
+
+
 #
 # Networksystem Main parser routine
 #
@@ -608,8 +692,12 @@ def networksystem_parser(parent_subparser, common_parser):
     # discover command parser
     discover_parser(subcommand_parsers, common_parser)
 
-    # discover command parser
-    #vdcreferences_parser(subcommand_parsers, common_parser)
-
-    # discover command parser
+    # list connections command parser
     listconnections_parser(subcommand_parsers, common_parser)
+
+    # register command parser
+    register_parser(subcommand_parsers, common_parser)
+
+    # deregister command parser
+    deregister_parser(subcommand_parsers, common_parser)
+

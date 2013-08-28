@@ -25,7 +25,7 @@ class StorageSystem(object):
     URI_STORAGESYSTEM_DETAILS = '/vdc/storage-systems/{0}'
     URI_STORAGESYSTEM_INVENTORY = '/vdc/storage-systems/{0}/physical-inventory'
     
-    URI_STORAGESYSTEM_REGISTER = '/vdc/smis-providers/{0}/storage-systems/{1}/register'
+    URI_STORAGESYSTEM_REGISTER = '/vdc/storage-systems/{0}/register'
     URI_STORAGESYSTEM_UNREGISTER = '/vdc/storage-systems/{0}/deregister'
     URI_STORAGESYSTEM_DELETE = '/vdc/storage-systems/{0}/deactivate'
     URI_STORAGESYSTEM_DISCOVER_BY_ID = '/vdc/storage-systems/{0}/discover'
@@ -34,6 +34,9 @@ class StorageSystem(object):
     URI_SMISPROVIDER_LIST = '/vdc/smis-providers'
     URI_SMISPROVIDER_DETAILS = '/vdc/smis-providers/{0}'
     URI_STORAGESYSTEM_CONNECTIVITY = '/vdc/storage-systems/{0}/connectivity'
+  
+    URI_STORAGESYSTEM_UNMANAGED_VOLUMES = '/vdc/storage-systems/{0}/unmanaged/volumes'
+    URI_STORAGESYSTEM_UNMANAGED_FILESYSTEMS = '/vdc/storage-systems/{0}/unmanaged/filesystems'
 
     SYSTEM_TYPE_LIST = ['isilon', 'vnxblock', 'vnxfile', 'vmax', 'netapp', 'vplex']
     
@@ -167,7 +170,7 @@ class StorageSystem(object):
                 raise e
                 
         if(storage_system_exists):
-            common.print_err_msg_and_exit("create", "storagesystem", 
+            common.format_err_msg_and_raise("create", "storagesystem", 
                                           "Storage system with name: " +system_name + " already exists", 
                                           SOSError.ENTRY_ALREADY_EXISTS_ERR)
             
@@ -225,9 +228,25 @@ class StorageSystem(object):
         o = common.json_decode(s)
         return o
     
-    def unregister_storagesystem(self, serial_number):
+    '''
+    Given the id/uri of the storagesystem, it marks the status to registered
+    '''
+    def register_storagesystem(self, name, type):
         
-        system_id = self.query_by_serial_number(serial_number)
+        systemId = self.query_by_name_and_type(name, type)
+        
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                                                  StorageSystem.URI_STORAGESYSTEM_REGISTER.format(systemId),
+                                                  None, None)
+        if(s):
+            o = common.json_decode(s)
+            return o
+        return
+    
+    def unregister_storagesystem(self, name, type):
+        
+        system_id = self.query_by_name_and_type(name, type)
+            
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
                                                   StorageSystem.URI_STORAGESYSTEM_UNREGISTER.format(system_id),
                                                   None, None)
@@ -411,7 +430,88 @@ class StorageSystem(object):
                             "Storage system with name: " + 
                             attribval["name"] + " of type: " + 
                             attribval["type"] + " not found")
-        
+       
+    def get_storagesystem_id(self, **attribval):
+
+        '''
+        Returns details of a storage system based on its name or UUID
+        Parameters:
+            name: name of storage system
+            serialnum : serial number of storage system
+            type: type of storage system
+        Returns:
+            a Response payload of system id
+        Throws:
+            SOSError - if id or name not found
+        '''
+
+        if("serialnum" in attribval and "type" in attribval):
+            return  self.query_by_serial_number_and_type(attribval["serialnum"], attribval["type"])
+
+        elif("name" in attribval and "type" in attribval):
+            storage_systems = self.list_systems_by_query(type=attribval["type"])
+            if(len(storage_systems) > 0):
+                for system in storage_systems:
+                    if( ( ("name" in system and system["name"] == attribval["name"])
+                        or("name" not in system and "native_guid" in system and system["native_guid"] == attribval["name"]) )
+                        and
+                       (system["system_type"] == attribval["type"])):
+                        return system['id']
+
+            raise SOSError(SOSError.NOT_FOUND_ERR,
+                            "Storage system with name: " +
+                            attribval["name"] + " of type: " +
+                            attribval["type"] + " not found")
+
+    def unmanaged_volumes(self, **attribval):
+
+        '''
+        Returns details of a storage system based on its name or UUID
+        Parameters:
+            name: name of storage system
+            serialnum : serial number of storage system
+            type: type of storage system
+        Returns:
+            a Response payload of list of unmanaged volume ids
+        Throws:
+            SOSError - if id or name not found
+        '''
+        ssid = self.get_storagesystem_id(**attribval)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             StorageSystem.URI_STORAGESYSTEM_UNMANAGED_VOLUMES.format(ssid),
+                                              None)
+        o = common.json_decode(s)
+        if(not o or "unmanaged_volume" not in o):
+            return []
+
+        return common.get_node_value(o, 'unmanaged_volume')
+
+    def unmanaged_filesystems(self, **attribval):
+
+        '''
+        Returns details of a storage system based on its name or UUID
+        Parameters:
+            name: name of storage system
+            serialnum : serial number of storage system
+            type: type of storage system
+        Returns:
+            a Response payload of list of unmanaged volume ids
+        Throws:
+            SOSError - if id or name not found
+        '''
+        ssid = self.get_storagesystem_id(**attribval)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             StorageSystem.URI_STORAGESYSTEM_UNMANAGED_FILESYSTEMS.format(ssid),
+                                              None)
+        o = common.json_decode(s)
+        if(not o or "unmanaged_filesystem" not in o):
+            return []
+
+        return common.get_node_value(o, 'unmanaged_filesystem')
+
+
+ 
     def show_by_name(self, name):
         '''
         Returns details of a storage system based on its name or UUID
@@ -461,17 +561,22 @@ class StorageSystem(object):
                                               None)
         return
     
-    def discover_storagesystem(self, device_name=None, serialno = None, device_type=None):
-        if(device_name is None or device_type is None or serialno is None):
+    '''
+    Discovers the storage system based on the options provided
+    '''
+    def discover_storagesystem(self, device_name=None, serialno=None, device_type=None):
+        
+        #Discover all case
+        if(device_name is None and device_type is None and serialno is None):
             self.discover_storagesystem_by_uri()
             return
         
         urideviceid = None
-        if(serialno):
+        if(serialno and device_type):
             urideviceid = self.query_by_serial_number_and_type(serialno, device_type)
-        elif(device_name):
-            urideviceidTemp = self.show(name=device_name, type=device_type)
-            urideviceid = urideviceidTemp['id']    
+        elif(device_name and device_type):
+            urideviceid = self.query_by_name_and_type(device_name, device_type)
+              
         
         self.discover_storagesystem_by_uri(urideviceid)
         return
@@ -609,7 +714,7 @@ def storagesystem_create(args):
                          args.smisport, args.usessl,
                          args.smisuser, smis_passwd)
     except SOSError as e:
-        common.print_err_msg_and_exit("create", "storagesystem", e.err_text, e.err_code)
+        common.format_err_msg_and_raise("create", "storagesystem", e.err_text, e.err_code)
         
 '''
 This method checks if SMI-S provider properties are supplied or not
@@ -617,13 +722,13 @@ This method checks if SMI-S provider properties are supplied or not
 def validate_smis_props(arguments):
     if(arguments.smisip is None or arguments.smisport is None or arguments.smisuser is None):
         errorMessage = "For device type "+arguments.type+" -smisuser, -smisip and -smisport are required"
-        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+        common.format_err_msg_and_raise("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
     
     #Here means, SMI-S props are supplied
     #check if the SMI-S port is valid one
     if(not common.validate_port_number(arguments.smisport)):
         errorMessage = "-smisport " +  str(arguments.smisport) + " is not a valid port number"
-        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+        common.format_err_msg_and_raise("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
 
 '''
 This method validates the properties required for the storage system not managed by SMI-S provider
@@ -631,13 +736,13 @@ This method validates the properties required for the storage system not managed
 def validate_device_props(arguments):
     if(arguments.deviceip is None or arguments.deviceport is None or arguments.user is None):
         errorMessage = "For device type "+arguments.type+" -user, -deviceip, and -deviceport are required"
-        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+        common.format_err_msg_and_raise("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
     
     #Here means, device props are supplied
     #check if the device port is valid one
     if(not common.validate_port_number(arguments.deviceport)):
         errorMessage = "-deviceport " +  str(arguments.deviceport) + " is not a valid port number"
-        common.print_err_msg_and_exit("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
+        common.format_err_msg_and_raise("create", "storagesystem", errorMessage, SOSError.CMD_LINE_ERR)
         
 
 
@@ -724,14 +829,19 @@ def register_parser(subcommand_parsers, common_parser):
                                metavar='<name>',
                                help='name of the storage system',
                                required=True)
+    mandatory_args.add_argument('-t', '-type',
+                               choices=StorageSystem.SYSTEM_TYPE_LIST,
+                               dest='type',
+                               help='Type of storage system',
+                               required=True)
     register_parser.set_defaults(func=storagesystem_register)
 
 def storagesystem_register(args):
     obj = StorageSystem(args.ip, args.port)
     try:
-        obj.register_smis_provider(args.name)
+        obj.register_storagesystem(args.name, args.type)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("register", "storagesystem", e.err_text, e.err_code)
     
 
 def unregister_parser(subcommand_parsers, common_parser):
@@ -742,21 +852,26 @@ def unregister_parser(subcommand_parsers, common_parser):
                                 conflict_handler='resolve',
                                 help='Unregister a storage system')
     mandatory_args = unregister_parser.add_argument_group('mandatory arguments')
-    mandatory_args.add_argument('-sn', '-serialnumber',
-                               dest='serialnum',
-                               metavar='<serialnumber>',
-                               help='Serial number of the storage system',
+    mandatory_args.add_argument('-n', '-name',
+                               dest='name',
+                               metavar='<name>',
+                               help='name of the storage system',
+                               required=True)
+    mandatory_args.add_argument('-t', '-type',
+                               choices=StorageSystem.SYSTEM_TYPE_LIST,
+                               dest='type',
+                               help='Type of storage system',
                                required=True)
     unregister_parser.set_defaults(func=storagesystem_unregister)
 
 def storagesystem_unregister(args):
     obj = StorageSystem(args.ip, args.port)
     try:
-        obj.unregister_storagesystem(args.serialnum)
+        obj.unregister_storagesystem(args.name, args.type)
         
     except SOSError as e:
         if (e.err_code == SOSError.NOT_FOUND_ERR):
-            common.print_err_msg_and_exit("deregister", "storagesystem", e.err_text, e.err_code)
+            common.format_err_msg_and_raise("deregister", "storagesystem", e.err_text, e.err_code)
         else:
             raise e
 
@@ -803,7 +918,85 @@ def storagesystem_show(args):
         return common.format_json_object(res)
     except SOSError as e:
         raise e
-    
+
+# get unmanaged volumes  command parser
+def um_volume_parser(subcommand_parsers, common_parser):
+    um_volume_parser = subcommand_parsers.add_parser('get_unmanagedvolumes',
+                                description='ViPR Storage system get unmanaged volumes  CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='show list of uumanaged volumes details')
+    mutex_group = um_volume_parser.add_mutually_exclusive_group(required=True)
+    mandatory_args = um_volume_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-t', '-type',
+                             dest='type',
+                             help='Type of storage system',
+                             choices=StorageSystem.SYSTEM_TYPE_LIST,
+                             required=True)
+    mutex_group.add_argument('-n', '-name',
+                             metavar='<name>',
+                             dest='name',
+                             help='Name of storage system')
+    mutex_group.add_argument('-sn', '-serialnumber',
+                               dest='serialnum',
+                               metavar='<serialnumber>',
+                               help='Serial number of the storage system')
+
+
+    um_volume_parser.set_defaults(func=storagesystem_unmanaged_volumes)
+
+def storagesystem_unmanaged_volumes(args):
+    obj = StorageSystem(args.ip, args.port)
+    try:
+        if(args.serialnum):
+            res = obj.unmanaged_volumes( serialnum=args.serialnum, type=args.type)
+        else:
+            res = obj.unmanaged_volumes( name=args.name, type=args.type)
+
+        return common.format_json_object(res)
+    except SOSError as e:
+        raise e
+
+# get unmanaged volumes  command parser
+def um_fileshare_parser(subcommand_parsers, common_parser):
+    um_fileshare_parser = subcommand_parsers.add_parser('get_unmanagedfilesystems',
+                                description='ViPR Storage system get unmanaged filesystems  CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='show list of uumanaged filesystems details')
+    mutex_group = um_fileshare_parser.add_mutually_exclusive_group(required=True)
+    mandatory_args = um_fileshare_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-t', '-type',
+                             dest='type',
+                             help='Type of storage system',
+                             choices=StorageSystem.SYSTEM_TYPE_LIST,
+                             required=True)
+    mutex_group.add_argument('-n', '-name',
+                             metavar='<name>',
+                             dest='name',
+                             help='Name of storage system')
+    mutex_group.add_argument('-sn', '-serialnumber',
+                               dest='serialnum',
+                               metavar='<serialnumber>',
+                               help='Serial number of the storage system')
+
+
+    um_fileshare_parser.set_defaults(func=storagesystem_unmanaged_filesystems)
+
+def storagesystem_unmanaged_filesystems(args):
+    obj = StorageSystem(args.ip, args.port)
+    try:
+        if(args.serialnum):
+            res = obj.unmanaged_filesystems( serialnum=args.serialnum, type=args.type)
+        else:
+            res = obj.unmanaged_filesystems( name=args.name, type=args.type)
+
+        return common.format_json_object(res)
+    except SOSError as e:
+        raise e
+
+
+
 # connectivity command parser
 def ps_con_parser(subcommand_parsers, common_parser):
     ps_con_parser = subcommand_parsers.add_parser('connectivity',
@@ -1090,7 +1283,7 @@ def storagesystem_parser(parent_subparser, common_parser):
     delete_parser(subcommand_parsers, common_parser)
     
     # register command parser
-    # register_parser(subcommand_parsers, common_parser)
+    register_parser(subcommand_parsers, common_parser)
     
     # discover command parser
     discover_parser(subcommand_parsers, common_parser)
@@ -1110,5 +1303,9 @@ def storagesystem_parser(parent_subparser, common_parser):
     # update storage system command parser
     update_parser(subcommand_parsers, common_parser)
     
+    # unmanaged volumes  command parser
+    um_volume_parser(subcommand_parsers, common_parser)
 
+    # update storage system command parser
+    um_fileshare_parser(subcommand_parsers, common_parser)
 

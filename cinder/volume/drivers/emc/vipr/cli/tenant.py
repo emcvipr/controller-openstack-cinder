@@ -30,6 +30,10 @@ class Tenant(object):
     URI_SUBTENANT = URI_TENANT + '/subtenants'
     URI_SUBTENANT_INFO = URI_SUBTENANT + '/{0}'
     URI_RESOURCE_DEACTIVATE      = '{0}/deactivate'
+    URI_TENANT_HOSTS		 = URI_TENANTS + '/hosts'
+    URI_TENANT_CLUSTERS		 = URI_TENANTS + '/clusters'
+    URI_TENANT_VCENTERS		 = URI_TENANTS + '/vcenters'
+
 
     URI_NAMESPACE_COMMON            = URI_SERVICES_BASE + '/object/namespaces'
     URI_NAMESPACE_BASE              = URI_NAMESPACE_COMMON + '/namespace'
@@ -393,6 +397,79 @@ class Tenant(object):
         return o
 
 
+    def tenant_get_hosts(self, label, xml=False):
+        '''
+        Makes a REST API call to retrieve details of a tenant  based on its UUID
+        '''
+        if label:
+            id = self.tenant_query(label)
+        else:
+            id = self.tenant_getid()
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             Tenant.URI_TENANT_HOSTS.format(id),
+                                                     None, None, xml)
+
+        o = common.json_decode(s)
+
+        from host import Host
+        obj = Host(self.__ipAddr, self.__port)
+
+        hostsdtls = obj.show(o['host'])
+
+        return hostsdtls
+
+
+
+    def tenant_get_clusters(self, label, xml=False):
+        '''
+        Makes a REST API call to retrieve details of a tenant  based on its UUID
+        '''
+        if label:
+            id = self.tenant_query(label)
+        else:
+            id = self.tenant_getid()
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             Tenant.URI_TENANT_CLUSTERS.format(id),
+                                                     None, None, xml)
+
+        o = common.json_decode(s)
+
+        from cluster import Cluster
+        obj = Cluster(self.__ipAddr, self.__port)
+
+        dtlslst = obj.cluster_get_details_list(o['cluster'])
+
+        return dtlslst
+
+
+
+    def tenant_get_vcenters(self, label, xml=False):
+        '''
+        Makes a REST API call to retrieve details of a tenant  based on its UUID
+        '''
+        if label:
+            id = self.tenant_query(label)
+        else:
+            id = self.tenant_getid()
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
+                                             Tenant.URI_TENANT_VCENTERS.format(id),
+                                                     None, None, xml)
+
+        o = common.json_decode(s)
+
+        from vcenter import VCenter
+        obj = VCenter(self.__ipAddr, self.__port)
+
+        dtlslst = obj.vcenter_get_details_list(o['vcenter'])
+
+        return dtlslst
+
+
+
+
     def tenant_getid(self):
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "GET", Tenant.URI_TENANT, None)
@@ -671,7 +748,7 @@ def tenant_create(args):
 def add_attribute_parser(subcommand_parsers, common_parser):
     # create command parser
     add_attribute_parser = subcommand_parsers.add_parser('add-attribute',
-                                description='ViPR Tenant Create CLI usage.',
+                                description='ViPR Tenant add attribute CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Create a Tenant')
@@ -733,15 +810,18 @@ def remove_attribute_parser(subcommand_parsers, common_parser):
 
     mandatory_args.add_argument('-key',
                                help='key of AD attribute to map to tenant',
-                               dest='key', metavar='key')
+                               dest='key', metavar='key',
+                               required=True)
 
     mandatory_args.add_argument('-value',
                                help='value of AD attribute to map to tenant',
-                               dest='value', metavar='value')
+                               dest='value', metavar='value',
+                               required=True)
 
     mandatory_args.add_argument('-domain',
                                help='domain',
-                               dest='domain', metavar='<domain>')
+                               dest='domain', metavar='<domain>',
+                               required=True)
 
     remove_attribute_parser.set_defaults(func=tenant_remove_attribute)
 
@@ -868,6 +948,9 @@ def tenant_show(args):
                            "Tenant show failed: " + e.err_text)
         else:
             raise e
+
+
+
 
 # TENANT Query routines
 
@@ -1130,6 +1213,159 @@ def get_role(args):
         raise e
 
 
+def get_tenant_hosts_parser(subcommand_parsers, common_parser):
+    # role  command parser
+    get_tenant_hosts_parser = subcommand_parsers.add_parser('get-hosts',
+                                description='ViPR Get Hosts CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Get Hosts of a Tenant')
+ 
+    mandatory_args = get_tenant_hosts_parser.add_argument_group('mandatory arguments')
+
+    get_tenant_hosts_parser.add_argument('-tenant', '-tn',
+                                help='name of Tenant',
+                                dest='tenant',
+                                metavar='<tenant>', 
+				default=None)
+
+
+    get_tenant_hosts_parser.add_argument('-long', '-l',
+                             action='store_true',
+                             help='List vcenters with more details in tabular form',
+                             dest='long')
+
+    get_tenant_hosts_parser.add_argument('-verbose', '-v',
+                             action='store_true',
+                             help='List vcenters with details',
+                             dest='verbose')
+
+    get_tenant_hosts_parser.set_defaults(func=get_tenant_hosts)
+
+
+
+def get_tenant_hosts(args):
+    obj = Tenant(args.ip, args.port)
+    
+    try:
+        res = obj.tenant_get_hosts(args.tenant)
+        
+	if(len(res) > 0):
+            if(args.verbose == True):
+                return common.format_json_object(res)
+            elif(args.long == True):
+                from common import TableGenerator
+                TableGenerator(res, [ 'name', 'type', 'job_discovery_status', 'job_metering_status']).printTable()
+            else:
+                from common import TableGenerator
+                TableGenerator(res, [ 'name']).printTable()
+
+    except SOSError as e:
+        raise e
+
+
+
+def get_tenant_clusters_parser(subcommand_parsers, common_parser):
+    get_tenant_clusters_parser  = subcommand_parsers.add_parser('get-clusters',
+                                description='ViPR Get Hosts CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Get Hosts of a Tenant')
+
+    mandatory_args = get_tenant_clusters_parser.add_argument_group('mandatory arguments')
+
+    get_tenant_clusters_parser.add_argument('-tenant', '-tn',
+                                help='name of Tenant',
+                                dest='tenant',
+                                metavar='<tenant>',
+				default=None)
+
+    get_tenant_clusters_parser.add_argument('-long', '-l',
+                             action='store_true',
+                             help='List vcenters with more details in tabular form',
+                             dest='long')
+
+    get_tenant_clusters_parser.add_argument('-verbose', '-v',
+                             action='store_true',
+                             help='List vcenters with details',
+                             dest='verbose')
+
+
+    get_tenant_clusters_parser.set_defaults(func=get_tenant_clusters)
+
+
+
+def get_tenant_clusters(args):
+    obj = Tenant(args.ip, args.port)
+
+    try:
+        res = obj.tenant_get_clusters(args.tenant)
+
+        if(len(res) > 0):
+            if(args.verbose == True):
+                return common.format_json_object(res)
+            elif(args.long == True):
+                from common import TableGenerator
+                TableGenerator(res, [ 'name']).printTable()
+            else:
+                from common import TableGenerator
+                TableGenerator(res, [ 'name']).printTable()
+
+    except SOSError as e:
+        raise e
+
+
+def get_tenant_vcenters_parser(subcommand_parsers, common_parser):
+    # role  command parser
+    get_tenant_vcenters_parser = subcommand_parsers.add_parser('get-vcenters',
+                                description='ViPR Get Vcenters CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Get Vcenters of a Tenant')
+
+    mandatory_args = get_tenant_vcenters_parser.add_argument_group('mandatory arguments')
+
+    get_tenant_vcenters_parser.add_argument('-tenant', '-tn',
+                                help='name of Tenant',
+                                dest='tenant',
+                                metavar='<tenant>',
+				default=None)
+
+
+    get_tenant_vcenters_parser.add_argument('-long', '-l',
+                             action='store_true',
+                             help='List vcenters with more details in tabular form',
+                             dest='long')
+
+    get_tenant_vcenters_parser.add_argument('-verbose', '-v',
+                             action='store_true',
+                             help='List vcenters with details',
+                             dest='verbose')
+
+
+    get_tenant_vcenters_parser.set_defaults(func=get_tenant_vcenters)
+
+
+
+def get_tenant_vcenters(args):
+    obj = Tenant(args.ip, args.port)
+
+    try:
+        res = obj.tenant_get_vcenters(args.tenant)
+
+        if(len(res) > 0):
+            if(args.verbose == True):
+                return common.format_json_object(res)
+            elif(args.long == True):
+                from common import TableGenerator
+                TableGenerator(res, [ 'name','ip_address', 'job_discovery_status', 'job_metering_status']).printTable()
+            else:
+                from common import TableGenerator
+                TableGenerator(res, [ 'name']).printTable()
+
+    except SOSError as e:
+        raise e
+
 
 
 def create_namespace_parser(subcommand_parsers, common_parser):
@@ -1366,6 +1602,15 @@ def tenant_parser(parent_subparser, common_parser):
 
     # remove attribute parser
     remove_attribute_parser(subcommand_parsers, common_parser)
+
+    #get hosts of tenant parser
+    get_tenant_hosts_parser(subcommand_parsers, common_parser)
+
+    #get clusters of tenant parser
+    get_tenant_clusters_parser(subcommand_parsers, common_parser)
+
+    #get vcenters of tenant parser
+    get_tenant_vcenters_parser(subcommand_parsers, common_parser)
 
     # remove group parser
     #remove_group_parser(subcommand_parsers, common_parser)

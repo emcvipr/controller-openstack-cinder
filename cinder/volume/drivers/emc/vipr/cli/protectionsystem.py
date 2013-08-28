@@ -103,7 +103,7 @@ class ProtectionSystem(object):
     def ps_list_by_hrefs(self, hrefs):
         return common.list_by_hrefs(self.__ipAddr, self.__port, hrefs) 
 
-    def ps_create(self, name, installationid,  deviceip, deviceport, 
+    def ps_create(self, name, deviceip, deviceport, 
                    username, type, registration_mode):
         '''
         This is the function will create the Recovery Point with given name and type.
@@ -145,8 +145,6 @@ class ProtectionSystem(object):
                     parms['ip_address'] = deviceip
                 if (deviceport):
                     parms['port_number'] = deviceport
-                if (installationid):
-                    parms['installation_id'] = installationid
                 if(username):
                     parms['user_name'] = username
 		if(passwd):
@@ -296,7 +294,7 @@ class ProtectionSystem(object):
         for uri in uris:
             rp = common.show_by_href(self.__ipAddr, self.__port, uri)
 	    if(rp):
-                if (rp['installation_id'] == name):
+                if (rp['name'] == name):
                     return rp['id']    
         raise SOSError(SOSError.SOS_FAILURE_ERR, "Recovery Point:" + name + 
 		       ": not found")
@@ -317,11 +315,6 @@ def create_parser(subcommand_parsers, common_parser):
                 help='Name of Protection system',
                 metavar='<name>',
                 dest='name',
-                required=True)
-    mandatory_args.add_argument('-installationid','-iid',
-                help='Installation ID of protection system',
-                metavar='<installationid>',
-                dest='installationid',
                 required=True)
     mandatory_args.add_argument('-deviceip','-dip',
                 help='Protection system device IP',
@@ -354,19 +347,20 @@ def create_parser(subcommand_parsers, common_parser):
 def ps_create(args):
     try:
         obj = ProtectionSystem(args.ip, args.port)
+        
+        if(not common.validate_port_number(args.deviceport)):
+            errorMessage = "-deviceport " +  str(args.deviceport) + " is not a valid port number"
+            raise SOSError(SOSError.CMD_LINE_ERR, errorMessage)
+        
         res = obj.ps_create(args.name, 
-                             args.installationid,
                              args.deviceip,
                              args.deviceport,
                              args.username,
                              args.type,
                              args.registration_mode )
     except SOSError as e:
-        if (e.err_code == SOSError.SOS_FAILURE_ERR):
-            raise SOSError(SOSError.SOS_FAILURE_ERR, "Protection system " + args.name + 
- 			  " ("+ args.type + ") " + ": Create failed\n" + e.err_text )
-        else:
-            raise e
+        common.format_err_msg_and_raise("create", "protectionsystem "+ args.name +" ("+ args.type + ") ", e.err_text, e.err_code)
+        
 # Protection system update routines
 
 def update_parser(subcommand_parsers, common_parser):
@@ -406,6 +400,12 @@ def update_parser(subcommand_parsers, common_parser):
 def ps_update(args):
     try:
         obj = ProtectionSystem(args.ip, args.port)
+        if(args.deviceport):
+            if(not common.validate_port_number(args.deviceport)):
+                errorMessage = "-deviceport " +  str(args.deviceport) + " is not a valid port number"
+                raise SOSError(SOSError.CMD_LINE_ERR, errorMessage)
+                #At least one of the arguments
+
         res = obj.ps_update( args.name,
 	   		     args.deviceip,
                              args.deviceport,
@@ -413,11 +413,7 @@ def ps_update(args):
                              args.type,
                             )
     except SOSError as e:
-        if (e.err_code == SOSError.SOS_FAILURE_ERR):
-            raise SOSError(SOSError.SOS_FAILURE_ERR, "Protection system " + args.name +
- 			  " ("+ args.type + ") " + ": update failed\n" + e.err_text )
-        else:
-            raise e        
+        common.format_err_msg_and_raise("update", "protectionsystem "+ args.name +" ("+ args.type + ") ", e.err_text, e.err_code)     
 
 # Protection system Delete routines
 
@@ -452,7 +448,7 @@ def ps_delete(args):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Protection system " + args.name + 
                           " ("+ args.type + ") " + ": Delete failed\n"  + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("delete", "protectionsystem", e.err_text, e.err_code)  
         
 
 # Protection system discover routines
@@ -480,7 +476,7 @@ def ps_discover(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Protection system " + ": discover failed\n"  + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("discover", "protectionsystem", e.err_text, e.err_code)
 
 # Protection system connectivity routines
 def connectivity_parser(subcommand_parsers, common_parser):
@@ -508,7 +504,7 @@ def ps_connectivity(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Protection system " + ": connectivity failed\n"  + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("connectivity", "protectionsystem", e.err_text, e.err_code)
 			
 # Protection system Show routines
 
@@ -546,7 +542,7 @@ def ps_show(args):
             return common.format_xml(res)
         return common.format_json_object(res)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("show", "protectionsystem", e.err_text, e.err_code)
 
 
 # Protection system List routines
@@ -597,7 +593,7 @@ def ps_list(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Protection system list failed\n"  + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("list", "protectionsystem", e.err_text, e.err_code)
       
 #
 # Protection system Main parser routine

@@ -287,9 +287,9 @@ class VirtualPool(object):
         return o
  
     def vpool_create(self, name, description,  type, protocols, 
-                   multipaths, varrays, provisiontype, protection,
+                   multipaths, varrays, provisiontype, protectionvpool,
                    systemtype, raidlevel, fastpolicy, drivetype, expandable, usematchedpools,
-                   max_snapshots, max_mirrors, multivolconsistency):
+                   max_snapshots, max_mirrors, vpoolmirror, multivolconsistency):
         '''
         This is the function will create the VPOOL with given name and type.
         It will send REST API request to ViPR instance.
@@ -313,12 +313,7 @@ class VirtualPool(object):
                     parms['description'] = description
                 if (protocols):
                     parms['protocols'] = protocols
-                if (multipaths):
-                    parms['num_paths'] = multipaths
-                if (multivolconsistency):
-                    parms['multi_volume_consistency'] = multivolconsistency
-                if(type == 'block' and provisiontype == None):
-                    raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL create error: argument -provisiontype/-pt is required")
+                    
                 if(provisiontype):
                     pt = None
                     if( provisiontype.upper() == 'THICK'):
@@ -327,7 +322,11 @@ class VirtualPool(object):
                         pt = 'Thin'
                     else:
                         raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL create error: Invalid provisiontype: " + provisiontype)
-                    parms['provisioning_type'] = pt    
+                    parms['provisioning_type'] = pt 
+                
+                if(systemtype):
+                    parms['system_type'] = systemtype
+                       
                 if(varrays):
                     urilist = []
                     nh_obj = VirtualArray(self.__ipAddr, self.__port)
@@ -335,45 +334,93 @@ class VirtualPool(object):
                         nhuri = nh_obj.varray_query(varray)
                         urilist.append(nhuri)
                     parms['varrays'] = urilist
-                if(protection or max_snapshots or max_mirrors):
-                    mirval = None
-                    contval = None
-                    if (protection):
-                      for mapentry in protection:
-                          (name, value) = mapentry.split('=', 1)
-                          if(name == 'mirror'):
-                              mirval = value
-                          elif (name == 'continuous'):
-                              contval = value
-                          else:
-                              raise SOSError(SOSError.VALUE_ERR, "VPOOL create error: Invalid argument " + 
-                                           "'" + str(mapentry) + "'" + " for protection ")
-                    parms['protection'] = { 'mirror': mirval, 'continuous': contval,
-                                            'max_native_snapshots': max_snapshots,
-                                            'max_native_continuous_copies': max_mirrors}
-
-                if(systemtype):
-                    parms['system_type'] = systemtype
-                if(raidlevel):
-                    if(systemtype == None):
-                        raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL create error: argument -systemtype/-st is required ")
-                    parms['raid_levels'] = raidlevel
-                if(fastpolicy != None):
-                    parms['auto_tiering_policy_name'] = fastpolicy
-                if(drivetype):
-                    parms['drive_type'] = drivetype 
-                
-                if(expandable):
-                    parms['expandable'] = expandable
                     
                 if(usematchedpools):
-                    if(usematchedpools == "true" or usematchedpools == "True" or usematchedpools == "TRUE"):
+                    if(usematchedpools.upper() == "TRUE"):
                         parms['use_matched_pools'] = "true"
                     else:
                         parms['use_matched_pools'] = "false"
+
+                    
+                if(type == 'file'):
+                   #max snapshot for file protection  
+                    if(max_snapshots):
+                            vpool_protection_snapshots_param = dict()
+                            vpool_protection_snapshots_param['max_native_snapshots'] = max_snapshots
+                            
+                            file_vpool_protection_param = dict()
+                            file_vpool_protection_param['snapshots'] = vpool_protection_snapshots_param
+                            #file vpool params
+                            parms['protection'] = file_vpool_protection_param
+                else:
+                    # multiple path between host and array(zoning)
+                    if (multipaths):
+                        parms['num_paths'] = multipaths
+                        
+                    if(raidlevel):
+                        if(systemtype == None):
+                            raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL create error: argument -systemtype/-st is required ")
+                        parms['raid_levels'] = raidlevel
+                    
+                    # fast policy type
+                    if(fastpolicy != None):
+                        parms['auto_tiering_policy_name'] = fastpolicy
+                        
+                    if(drivetype):
+                        parms['drive_type'] = drivetype
+                    
+                                        #volume expansion is support
+                    if(expandable):
+                        parms['expandable'] = expandable
+                        
+                    if (multivolconsistency):
+                        parms['multi_volume_consistency'] = multivolconsistency
+                    
+                    #protection
+                    if(max_mirrors or protectionvpool or max_snapshots):
+                        block_vpool_protection_param = dict()
+                        
+                        # vpool mirror protection
+                        if(max_mirrors):
+                            vpool_protection_mirror_params = dict()
+                            #for protection mirror it is mandatory 
+                            vpool_protection_mirror_params['max_native_continuous_copies'] = max_mirrors
+                            if (vpoolmirror):# it's an optional data 
+                                vpool_protection_mirror_params['protection_mirror_vpool'] = self.vpool_query(vpoolmirror, "block")
+                            block_vpool_protection_param['continuous_copies'] = vpool_protection_mirror_params
+                            
+                        #rp protection    
+                        if (protectionvpool):
+                            vpool_protection_rp_params = dict()
+                            copies = protectionvpool.split(',')
+                            copyEntries = []
+                            nh_obj = VirtualArray(self.__ipAddr, self.__port)
+                            for copy in copies:
+                                copyParam = copy.split(":")
+                                copy = dict()
+                                copy['varray'] = nh_obj.varray_query(copyParam[0])
+                                copy['vpool'] = self.vpool_query(copyParam[1], "block")
+                                try:
+                                    copyPolicy = dict()
+                                    copyPolicy['journal_size'] = copyParam[2]
+                                    copy['policy'] = copyPolicy
+                                except:
+                                    pass
+                                copyEntries.append(copy)
+                                
+                            vpool_protection_rp_params['copies'] = copyEntries
+                            block_vpool_protection_param['recoverpoint'] = vpool_protection_rp_params
+                            
+                        #max snapshot for block 
+                        if (max_snapshots):
+                            vpool_protection_snapshot_params = dict() #base class attribute
+                            vpool_protection_snapshot_params['max_native_snapshots'] = max_snapshots
+                            block_vpool_protection_param['snapshots'] = vpool_protection_snapshot_params
+                        # block protection 
+                        parms['protection'] = block_vpool_protection_param
                   
                 body = json.dumps(parms)
-                
+
                 (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "POST", self.URI_VPOOL.format(type), body)
                 o = common.json_decode(s)
@@ -450,19 +497,26 @@ class VirtualPool(object):
                 nhurilist.append(nhobj.varray_query(varray))
         
         if (varray_add):
-            parms['varray_changes'] = { 'add' : { 'varray': nhurilist } }
+            parms['varray_changes'] = { 'add' : { 'varrays': nhurilist } }
 
         if (varray_remove):
-            parms['varray_changes'] = { 'add' : { 'varray': nhurilist } }
+            parms['varray_changes'] = { 'add' : { 'varrays': nhurilist } }
 
         if (multipaths):
             parms['num_paths'] = multipaths
 
-        if (max_snapshots):
-            parms['max_native_snapshots'] = max_snapshots
+        if(max_mirrors or max_snapshots):
+            vpool_protection_param = dict()
+            if (max_snapshots):
+                vpool_protection_snapshot_params = dict() #base class attribute
+                vpool_protection_snapshot_params['max_native_snapshots'] = max_snapshots
+                vpool_protection_param['snapshots'] = vpool_protection_snapshot_params
 
-        if (max_mirrors):
-            parms['max_native_continuous_copies'] = max_mirrors
+            if(max_mirrors):
+                vpool_protection_mirror_params = dict()
+                vpool_protection_mirror_params['max_native_continuous_copies'] = max_mirrors
+                vpool_protection_param['continuous_copies'] = vpool_protection_mirror_params
+            parms['protection'] = vpool_protection_param
 
         if ( use_matched_pools != None):
             if(use_matched_pools == "true" or use_matched_pools == "True" or use_matched_pools == "TRUE"):
@@ -561,15 +615,20 @@ def create_parser(subcommand_parsers, common_parser):
                 help='Maximum number of native continuous copies',
                 metavar='<max_mirrors>',
                 dest='max_mirrors')
+    create_parser.add_argument('-vpoolmirror','-vm',
+                help='vpool protection mirror',
+                metavar='<vpoolmirror>',
+                dest='vpoolmirror')
     create_parser.add_argument('-provisiontype','-pt',
                 help='Provision type Values can be Thin or Thick(mandatory for block VPOOL)',
                 metavar='<provisiontype>',
                 dest='provisiontype')
-    create_parser.add_argument('-protection','-prot',
-                help='Protection values can be mirror=value1 continuous=value2',
-                metavar='<protection>',
-                nargs='+',
-                dest='protection')
+    
+    create_parser.add_argument('-protectionvpool','-vp', 
+                help = 'Protection vpool per varray "varray1:vpool1:jrnalSize1,varray2:vpool2:jrnalSize2"',
+                metavar='<protectionvpool>', 
+                dest='protectionvpool')
+
     create_parser.add_argument('-systemtype','-st',
                 help='Supported System Types',
                 metavar='<systemtype>',
@@ -629,7 +688,7 @@ def vpool_create(args):
                              args.multipaths,
                              args.varrays,
                              args.provisiontype,
-                             args.protection,
+                             args.protectionvpool,
                              args.systemtype,
                              args.raidlevel,
                              args.fastpolicy,
@@ -638,6 +697,7 @@ def vpool_create(args):
                              args.usematchedpools,
                              args.max_snapshots,
                              args.max_mirrors,
+                             args.vpoolmirror,
                              args.multivolconsistency)
     except SOSError as e:
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
@@ -743,7 +803,7 @@ def vpool_update(args):
                              args.max_mirrors,
                              args.multivolconsistency)
     except SOSError as e:
-        common.print_err_msg_and_exit("update", "vpool", e.err_text, e.err_code)
+        common.format_err_msg_and_raise("update", "vpool", e.err_text, e.err_code)
 
 
 # VPOOL Delete routines

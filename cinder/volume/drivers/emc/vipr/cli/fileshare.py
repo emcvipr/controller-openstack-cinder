@@ -22,6 +22,7 @@ class Fileshare(object):
     '''
     #Commonly used URIs for the 'Fileshare' module
     URI_SEARCH_FILESHARES = '/file/filesystems/search?project={0}'
+    URI_SEARCH_FILESHARES_BY_PROJECT_AND_NAME='/file/filesystems/search?project={0}&name={1}'
     URI_FILESHARES = '/file/filesystems'
     URI_FILESHARE = URI_FILESHARES + '/{0}'
     URI_FILESHARE_CREATE = URI_FILESHARES + '?project={0}'
@@ -35,6 +36,9 @@ class Fileshare(object):
     URI_PROJECT_RESOURCES = '/projects/{0}/resources'
     URI_EXPAND = URI_FILESHARE + '/expand'
     URI_DEACTIVATE = URI_FILESHARE + '/deactivate'
+    
+    URI_UNMANAGED_FILESYSTEM_INGEST = '/vdc/unmanaged/filesystems/ingest'
+    URI_UNMANAGED_FILESYSTEM_SHOW = '/vdc/unmanaged/filesystems/{0}'
     
     URI_TASK_LIST = URI_FILESHARE + '/tasks'
     URI_TASK = URI_TASK_LIST + '/{1}'
@@ -66,7 +70,7 @@ class Fileshare(object):
         project_uri = proj.project_query(project)
         
         fileshare_uris = self.search_fileshares(project_uri)
-        fileshares=[]
+        fileshares = []
         for uri in fileshare_uris:
             fileshare = self.show_by_uri(uri)
             if(fileshare):
@@ -74,17 +78,27 @@ class Fileshare(object):
         return fileshares
     
     
+    '''
+    Given the project name and volume name, the search will be performed to find
+    if the fileshare with the given name exists or not. If found, the uri of the fileshare
+    will be returned
+    '''
+    def search_by_project_and_name(self, projectName, fileshareName):
+        
+        return common.search_by_project_and_name(projectName, fileshareName, Fileshare.URI_SEARCH_FILESHARES_BY_PROJECT_AND_NAME, self.__ipAddr, self.__port) 
+    
+    
     def search_fileshares(self, project_uri):
         
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                              "GET", 
-                                              Fileshare.URI_SEARCH_FILESHARES.format(project_uri), 
+                                              "GET",
+                                              Fileshare.URI_SEARCH_FILESHARES.format(project_uri),
                                               None)
         o = common.json_decode(s)
         if not o:
             return []
 
-        fileshare_uris=[]
+        fileshare_uris = []
         resources = common.get_node_value(o, "resource")
         for resource in resources:
             fileshare_uris.append(resource["id"])
@@ -101,17 +115,17 @@ class Fileshare(object):
         '''
 
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                              "GET", 
-                                              Fileshare.URI_PROJECT_RESOURCES.format(project_uri), 
+                                              "GET",
+                                              Fileshare.URI_PROJECT_RESOURCES.format(project_uri),
                                               None)
         o = common.json_decode(s)
         if not o:
             return []
 
-        fileshare_uris=[]
+        fileshare_uris = []
         resources = common.get_node_value(o, "project_resource")
         for resource in resources:
-            if(resource["resource_type"]=="fileshare"):
+            if(resource["resource_type"] == "fileshare"):
                 fileshare_uris.append(resource["id"])
         return fileshare_uris
     
@@ -135,7 +149,7 @@ class Fileshare(object):
 
         (pname, label) = common.get_parent_child_from_xpath(name)
         if(not pname):
-            raise SOSError(SOSError.NOT_FOUND_ERR, 
+            raise SOSError(SOSError.NOT_FOUND_ERR,
                "Filesystem " + name + ": not found")
         
         proj = Project(self.__ipAddr, self.__port)
@@ -151,7 +165,7 @@ class Fileshare(object):
                     return fileshare
                 else:
                     return self.show_by_uri(fileshare['id'], show_inactive, xml)
-        raise SOSError(SOSError.NOT_FOUND_ERR, 
+        raise SOSError(SOSError.NOT_FOUND_ERR,
                         "Filesystem " + label + ": not found")
     
     # Shows fileshare information given its uri
@@ -165,14 +179,14 @@ class Fileshare(object):
         '''
         if(xml):
             (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "GET", 
-                                             Fileshare.URI_FILESHARE.format(uri), 
+                                             "GET",
+                                             Fileshare.URI_FILESHARE.format(uri),
                                              None, None, xml)
             return s
             
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "GET",
-                                             Fileshare.URI_FILESHARE.format(uri), 
+                                             Fileshare.URI_FILESHARE.format(uri),
                                              None)
         if(not s):
             return None
@@ -182,6 +196,51 @@ class Fileshare(object):
         if('inactive' in o):
             if(o['inactive'] == True):
                 return None
+        return o
+
+    def unmanaged_filesystem_ingest(self, tenant, project,
+                                varray, vpool, filesystems):
+        '''
+        This function is to ingest given unmanaged filesystems
+        into ViPR.
+        '''
+        from project import Project
+        proj_obj = Project(self.__ipAddr, self.__port)
+        project_uri = proj_obj.project_query(tenant + "/" + project)
+
+        from virtualpool import VirtualPool
+        vpool_obj = VirtualPool(self.__ipAddr, self.__port)
+        vpool_uri = vpool_obj.vpool_query(vpool, "block")
+
+        from virtualarray import VirtualArray
+        varray_obj = VirtualArray(self.__ipAddr, self.__port)
+        varray_uri = varray_obj.varray_query(varray)
+
+        request = {
+             'vpool' : vpool_uri,
+             'varray' : varray_uri,
+             'project' : project_uri,
+             'unmanaged_filesystem_list' : filesystems
+            }
+
+        body = json.dumps(request)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Fileshare.URI_UNMANAGED_FILESYSTEM_INGEST,
+                                             body)
+        o = common.json_decode(s)
+        return o
+
+    def unmanaged_filesystem_show(self, filesystem):
+        '''
+        This function is to show the details of unmanaged filesystem
+        from  ViPR.
+        '''
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "GET",
+                                             Fileshare.URI_UNMANAGED_FILESYSTEM_SHOW.format(filesystem),
+                                             None)
+        o = common.json_decode(s)
         return o
     
     # Creates a fileshare given label, project, vpool and size
@@ -198,30 +257,6 @@ class Fileshare(object):
         Returns:
             Created task details in JSON response payload
         '''
-        name = project + '/' + label
-
-        try:
-            fileshare = self.show(name,True)
-            if(fileshare):
-                if(fileshare["inactive"]):
-                    pass
-                elif(fileshare["inactive"] == False):
-                    raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                               "Filesystem with name: " + label + 
-                               " already exists")
-                else:
-                    tasks = self.show_task_by_uri(fileshare["id"])
-                    for task in tasks:
-                        if(task['state'] in ["pending", "ready"]):
-                            raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                               "Filesystem with name: " + label + 
-                               " already exists. Associated task[" + task["op_id"] 
-                               + "] is in " + task['state'] +" state")
-        except SOSError as e:
-            if(e.err_code == SOSError.NOT_FOUND_ERR):
-                pass
-            else:
-                raise e
 
         from virtualpool import VirtualPool
         from project import Project
@@ -238,7 +273,7 @@ class Fileshare(object):
          'name' : label,
          'size' : size,
          'varray' : varray_uri,
-         'vpool' : { 'id'    : vpool_uri}
+         'vpool' : vpool_uri
          }
       
         if(protocol): 
@@ -256,14 +291,14 @@ class Fileshare(object):
             o = common.json_decode(s)
             if(sync):
                 #fileshare = self.show(name, True)
-                return self.block_until_complete(o["resource"]["id"], 
+                return self.block_until_complete(o["resource"]["id"],
                                              o["op_id"])
             else:
                 return o
         except SOSError as e:
                 errorMessage = str(e).replace(vpool_uri, vpool)
                 errorMessage = errorMessage.replace(varray_uri, varray)
-                common.print_err_msg_and_exit("create", "filesystem", errorMessage, e.err_code)
+                common.format_err_msg_and_raise("create", "filesystem", errorMessage, e.err_code)
                 
              
         
@@ -301,7 +336,7 @@ class Fileshare(object):
         return o
     
     # Exports a fileshare to a host given a fileshare name and the host name
-    def export(self, name, security_type, permission, root_user, endpoints, protocol, 
+    def export(self, name, security_type, permission, root_user, endpoints, protocol,
                share_name, share_description, permission_type, sub_dir, sync):
         '''
         Makes REST API call to export fileshare to a host
@@ -317,6 +352,7 @@ class Fileshare(object):
         Returns:
             Created Operation ID details in JSON response payload
         '''
+        fileshare_uri = name
         try:
             fileshare_uri = self.fileshare_query(name)
             if(protocol == 'CIFS'):
@@ -360,8 +396,10 @@ class Fileshare(object):
             else:
                 return o
         except SOSError as e:
-                errorMessage = str(e).replace(fileshare_uri, name)
-                common.print_err_msg_and_exit("export", "filesystem", errorMessage, e.err_code)
+                errorMessage = str(e)
+                if(common.is_uri(fileshare_uri)):
+                    errorMessage = str(e).replace(fileshare_uri, name)
+                common.format_err_msg_and_raise("export", "filesystem", errorMessage, e.err_code)
             
     
     # Unexports a fileshare from a host given a fileshare name, type of security and permission
@@ -384,7 +422,7 @@ class Fileshare(object):
                                              Fileshare.URI_FILESHARE_SMB_UNEXPORTS.format(fileshare_uri, share_name),
                                              None)
         else:
-            request_uri = Fileshare.URI_FILESHARE_UNEXPORTS.format(fileshare_uri, protocol, 
+            request_uri = Fileshare.URI_FILESHARE_UNEXPORTS.format(fileshare_uri, protocol,
                                                     security_type, permission, root_user)
             if(sub_dir):
                 request_uri = request_uri + "?subDirectory=" + sub_dir
@@ -399,32 +437,61 @@ class Fileshare(object):
             return o
     
     # Deletes a fileshare given a fileshare name
-    def delete(self, name, sync=False):
+    def delete(self, name, forceDelete=False, sync=False):
         '''
         Deletes a fileshare based on fileshare name
         Parameters:
             name: name of fileshare
         '''
         fileshare_uri = self.fileshare_query(name)
-        return self.delete_by_uri(fileshare_uri, sync)
+        return self.delete_by_uri(fileshare_uri, forceDelete, sync)
     
     # Deletes a fileshare given a fileshare uri
-    def delete_by_uri(self, uri, sync=False):
+    def delete_by_uri(self, uri, forceDelete=False, sync=False):
         '''
         Deletes a fileshare based on fileshare uri
         Parameters:
             uri: uri of fileshare
         '''
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, 
+        request = {"forceDelete":forceDelete}
+        body = json.dumps(request)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "POST",
                                              Fileshare.URI_DEACTIVATE.format(uri),
-                                             None)
+                                             body)
         if(not s):
             return None
         o = common.json_decode(s)
         if(sync):
             return self.block_until_complete(o["resource"]["id"], o["op_id"])
         return o
+    
+    def get_exports_by_uri(self, uri):
+        '''
+        Get a fileshare export based on fileshare uri
+        Parameters:
+            uri: uri of fileshare
+        '''
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "GET",
+                                             Fileshare.URI_FILESHARE_EXPORTS.format(uri),
+                                             None)
+        if(not s):
+            return None
+        o = common.json_decode(s)
+        if(not o):
+            return None
+        return o
+    
+    def get_exports(self, name):
+        '''
+        Get a fileshare export based on fileshare name
+        Parameters:
+            name: name of fileshare
+        '''
+        fileshare_uri = self.fileshare_query(name)
+        return self.get_exports_by_uri(fileshare_uri);
+       
 
     # Queries a fileshare given its name
     def fileshare_query(self, name):
@@ -441,7 +508,7 @@ class Fileshare(object):
             return name
         (pname, label) = common.get_parent_child_from_xpath(name)
         if(not pname):
-            raise SOSError(SOSError.NOT_FOUND_ERR, 
+            raise SOSError(SOSError.NOT_FOUND_ERR,
                            "Project name  not specified")
 
         proj = Project(self.__ipAddr, self.__port)
@@ -452,7 +519,7 @@ class Fileshare(object):
             fileshare = self.show_by_uri(uri)
             if (fileshare and fileshare['name'] == label):
                 return fileshare['id']
-        raise SOSError(SOSError.NOT_FOUND_ERR, 
+        raise SOSError(SOSError.NOT_FOUND_ERR,
                        "Filesystem " + label + ": not found")
 
     # Mounts the fileshare to the mount_dir
@@ -463,27 +530,21 @@ class Fileshare(object):
         then we need to mount the fileshare to the specified directory
         '''
                
-        share = self.show(name)
+        #share = self.show(name)
+        fsExportInfo = self.get_exports(name)
+        if(fsExportInfo and "filesystem_export" in fsExportInfo and 
+           len(fsExportInfo["filesystem_export"]) > 0):
+            fsExport = fsExportInfo["filesystem_export"][0];
             
-        if("fs_exports" in share):
-            if("storage_system" in share and share["storage_system"] and
-               "id" in share["storage_system"] and share["storage_system"]["id"]):
-                
-                from storagesystem import StorageSystem
-                ss_instance = StorageSystem(self.__ipAddr, self.__port)
-                storage_system = ss_instance.show_by_uri(share["storage_system"]["id"])
-                
-                mount_point = storage_system["ip_address"]+":"+share["mount_path"]
-                mount_cmd = 'mount '+ mount_point + " " + mount_dir
+       
+            mount_point = fsExport["mount_point"]
+            mount_cmd = 'mount ' + mount_point + " " + mount_dir
                     
-                (o, h) = commands.getstatusoutput(mount_cmd)
-                if(o == 0):
-                    return "Filesystem: " + name + " mounted to " + mount_dir + " successfully"
-                raise SOSError(SOSError.CMD_LINE_ERR,
-                           "Unable to mount " + name + " to " + mount_dir + "\nRoot cause: " + h)
-            else:
-                raise SOSError(SOSError.NOT_FOUND_ERR,
-                       "error: Unable to get the IP address of the storage system")
+            (o, h) = commands.getstatusoutput(mount_cmd)
+            if(o == 0):
+                return "Filesystem: " + name + " mounted to " + mount_dir + " successfully"
+            raise SOSError(SOSError.CMD_LINE_ERR,
+                        "Unable to mount " + name + " to " + mount_dir + "\nRoot cause: " + h)
         else:
             raise SOSError(SOSError.NOT_FOUND_ERR,
                        "error: Filesystem: " + name + " is not exported. Export it first.")
@@ -511,12 +572,12 @@ class Fileshare(object):
                 if(out["state"] == "error"):
                     # cancel the timer
                     t.cancel()
-                    raise SOSError(SOSError.VALUE_ERR, 
+                    raise SOSError(SOSError.VALUE_ERR,
                                    "Task: " + op_id + " is in ERROR state")
 
             if(self.isTimeout):
                 print "Operation timed out"
-                self.isTimeout=False
+                self.isTimeout = False
                 break
         return
     
@@ -546,7 +607,7 @@ class Fileshare(object):
             for uri in uris:
                 res = self.show_task_by_uri(uri)
                 if(res and len(res) > 0):
-                    all_tasks+=res
+                    all_tasks += res
             return all_tasks
             
     def show_task_by_uri(self, volume_uri, task_id=None):
@@ -574,11 +635,11 @@ class Fileshare(object):
     def expand(self, name, new_size, sync=False):
         
         fileshare_detail = self.show(name)
-        current_size = int(fileshare_detail["capacity"])
+        current_size = float(fileshare_detail["capacity_gb"])
         
         if(new_size <= current_size):
-            raise SOSError(SOSError.VALUE_ERR, 
-                           "error: Incorrect value of new size: " + str(new_size) +
+            raise SOSError(SOSError.VALUE_ERR,
+                           "error: Incorrect value of new size: " + str(new_size) + 
                            " bytes\nNew size must be greater than current size: " + str(current_size) + " bytes")
         
         body = json.dumps({
@@ -612,8 +673,8 @@ def create_parser(subcommand_parsers, common_parser):
                                 required=True)
     mandatory_args.add_argument('-size', '-s',
                                 help='Size of filesystem: {number}[unit]. ' + 
-                                'A size suffix of K for kilobytes, M for megabytes, G for  gigabytes, T  for ' +
-                                'terabytes is optional.' +
+                                'A size suffix of K for kilobytes, M for megabytes, G for  gigabytes, T  for ' + 
+                                'terabytes is optional.' + 
                                 'Default unit is bytes.',
                                 metavar='<filesharesize[kKmMgGtT]>',
                                 dest='size',
@@ -646,10 +707,10 @@ def fileshare_create(args):
     
     size = common.to_bytes(args.size)
     if not size:
-        raise SOSError(SOSError.CMD_LINE_ERR, 
+        raise SOSError(SOSError.CMD_LINE_ERR,
                        'error: Invalid input for -size')
     if(not args.tenant):
-        args.tenant=""
+        args.tenant = ""
     try:
         obj = Fileshare(args.ip, args.port)
         res = obj.create(args.tenant + "/" + args.project,
@@ -662,7 +723,7 @@ def fileshare_create(args):
 #        if(args.sync == False):
 #            return common.format_json_object(res)
     except SOSError as e:
-        if (e.err_code in [SOSError.NOT_FOUND_ERR, 
+        if (e.err_code in [SOSError.NOT_FOUND_ERR,
                            SOSError.ENTRY_ALREADY_EXISTS_ERR]):
             raise SOSError(e.err_code, "Create failed: " + e.err_text)
         else:
@@ -691,7 +752,7 @@ def update_parser(subcommand_parsers, common_parser):
                                 dest='project',
                                 help='Name of project',
                                 required=True)
-    mandatory_args.add_argument('-label','-l', 
+    mandatory_args.add_argument('-label', '-l',
                                 help='New label of filesystem',
                                 metavar='<label>',
                                 dest='label',
@@ -707,7 +768,7 @@ def update_parser(subcommand_parsers, common_parser):
 
 def fileshare_update(args):
     if(not args.tenant):
-        args.tenant=""
+        args.tenant = ""
     
     try:
         obj = Fileshare(args.ip, args.port)
@@ -748,19 +809,21 @@ def delete_parser(subcommand_parsers, common_parser):
                                 dest='sync',
                                 help='Execute in synchronous mode',
                                 action='store_true')
+    delete_parser.add_argument('-forceDelete', '-fd',
+                                metavar='<forceDelete>',
+                                dest='forceDelete',
+                                help='Delete fileshare forecibly, default false',
+                                default=False)
     delete_parser.set_defaults(func=fileshare_delete)
 
 def fileshare_delete(args):
     if(not args.tenant):
-        args.tenant=""
+        args.tenant = ""
     obj = Fileshare(args.ip, args.port)
     try:
-        obj.delete(args.tenant + "/" + args.project + "/" + args.name, args.sync)
+        obj.delete(args.tenant + "/" + args.project + "/" + args.name, args.forceDelete, args.sync)
     except SOSError as e:
-        if (e.err_code == SOSError.NOT_FOUND_ERR):
-            raise SOSError(e.err_code, "Delete failed: " + e.err_text)
-        else:
-            raise e
+        common.format_err_msg_and_raise("delete", "filesystem", e.err_text, e.err_code)
 
 # Fileshare Export routines
 
@@ -814,10 +877,10 @@ def export_parser(subcommand_parsers, common_parser):
                                 help='Description of SMB share',
                                 dest='desc')
     export_parser.add_argument('-permission_type', '-pt',
-                               choices=['allow','deny'],
+                               choices=['allow', 'deny'],
                                 help='Type of permission of SMB share',
                                 dest='permission_type')
-    export_parser.add_argument('-subdir', 
+    export_parser.add_argument('-subdir',
                                 metavar="<sub directory>",
                                 help='Export to FileSystem subdirectory',
                                 dest='subdir')
@@ -833,32 +896,32 @@ def fileshare_export(args):
     try:
         if(args.protocol == "CIFS"):
             if(args.share == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -share is required for CIFS export')
             if(args.desc == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -description is required for CIFS export')
         else:
             
             if(args.security == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -security is required for ' + args.protocol + ' export')
             if(args.permission == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -permission is required for ' + args.protocol + ' export')
             if(args.root_user == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -rootuser is required for ' + args.protocol + ' export')
             if(args.endpoint == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -endpoint is required for ' + args.protocol + ' export')
 
 
         if(not args.tenant):
-            args.tenant=""
+            args.tenant = ""
         obj = Fileshare(args.ip, args.port)
-        res = obj.export(args.tenant + "/" + args.project + "/" + args.name, 
-                         args.security, args.permission, args.root_user, args.endpoint, 
+        res = obj.export(args.tenant + "/" + args.project + "/" + args.name,
+                         args.security, args.permission, args.root_user, args.endpoint,
                          args.protocol, args.share, args.desc, args.permission_type, args.subdir, args.sync)
         
 #        if(args.sync == False):
@@ -914,7 +977,7 @@ def unexport_parser(subcommand_parsers, common_parser):
     unexport_parser.add_argument('-share', '-sh',
                                 help='Name of SMB share',
                                 dest='share')
-    unexport_parser.add_argument('-subdir', 
+    unexport_parser.add_argument('-subdir',
                                 metavar="<sub directory>",
                                 help='Unexport from FileSystem subdirectory',
                                 dest='subdir')
@@ -929,24 +992,24 @@ def fileshare_unexport(args):
         
         if(args.protocol == "CIFS"):
             if(args.share == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -share is required for CIFS unexport')
         else:
             if(args.security == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -security is required for ' + args.protocol + ' unexport')
             if(args.permission == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -permission is required for ' + args.protocol + ' unexport')
             if(args.root_user == None):
-                raise SOSError(SOSError.CMD_LINE_ERR, 
+                raise SOSError(SOSError.CMD_LINE_ERR,
                                'error: -rootuser is required for ' + args.protocol + ' unexport')
 
         obj = Fileshare(args.ip, args.port)
         if(not args.tenant):
-            args.tenant=""
-        res = obj.unexport(args.tenant + "/" + args.project + "/" + args.name, 
-                           args.security, args.permission, args.root_user, 
+            args.tenant = ""
+        res = obj.unexport(args.tenant + "/" + args.project + "/" + args.name,
+                           args.security, args.permission, args.root_user,
                            args.protocol, args.share, args.subdir, args.sync)
 #        if(args.sync == False):
 #            return common.format_json_object(res)
@@ -956,6 +1019,80 @@ def fileshare_unexport(args):
             raise SOSError(e.err_code, "Unexport failed: " + e.err_text)
         else:
             raise e
+
+# fileshare ingest routines
+
+def unmanaged_parser(subcommand_parsers, common_parser):
+    unmanaged_parser = subcommand_parsers.add_parser('unmanaged',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Unmanaged volume operations')
+    subcommand_parsers = unmanaged_parser.add_subparsers(help='Use one of the commands')
+
+    #ingest unmanaged volume
+    ingest_parser = subcommand_parsers.add_parser('ingest',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='ingest unmanaged fileshares into ViPR')
+    mandatory_args = ingest_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-vpool', '-vp',
+                                metavar='<vpool>',
+                                dest='vpool',
+                                help='Name of vpool',
+                                required=True)
+    ingest_parser.add_argument('-tenant', '-tn',
+                                metavar='<tenantname>',
+                                dest='tenant',
+                                help='Name of tenant')
+    mandatory_args.add_argument('-project', '-pr',
+                                metavar='<projectname>',
+                                dest='project',
+                                help='Name of project',
+                                required=True)
+    mandatory_args.add_argument('-varray', '-va',
+                                metavar='<varray>',
+                                dest='varray',
+                                help='Name of varray',
+                                required=True)
+    mandatory_args.add_argument('-filesystems', '-fs',
+                                metavar='<filesystems>',
+                                dest='filesystems',
+                                help='Name or id of filesystem',
+                                nargs='+',
+                                required=True)
+
+    #show unmanaged volume
+    umshow_parser = subcommand_parsers.add_parser('show',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Show unmanaged volume')
+    mandatory_args = umshow_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-filesystem', '-fs',
+                                metavar='<filesystem>',
+                                dest='filesystem',
+                                help='Name or id of filesystem',
+                                required=True)
+
+    ingest_parser.set_defaults(func=unmanaged_filesystem_ingest)
+
+    umshow_parser.set_defaults(func=unmanaged_filesystem_show)
+
+def unmanaged_filesystem_ingest(args):
+    obj = Fileshare(args.ip, args.port)
+    try:
+        if(not args.tenant):
+            args.tenant = ""
+        res = obj.unmanaged_filesystem_ingest(args.tenant, args.project,
+                             args.varray, args.vpool, args.filesystems)
+    except SOSError as e:
+        raise e
+
+def unmanaged_filesystem_show(args):
+    obj = Fileshare(args.ip, args.port)
+    try:
+        res = obj.unmanaged_filesystem_show(args.volume)
+    except SOSError as e:
+        raise e
             
 # Fileshare Show routines
  
@@ -990,12 +1127,46 @@ def fileshare_show(args):
     obj = Fileshare(args.ip, args.port)
     try:
         if(not args.tenant):
-            args.tenant=""
-        res = obj.show(args.tenant + "/" + args.project + "/" + args.name, 
+            args.tenant = ""
+        res = obj.show(args.tenant + "/" + args.project + "/" + args.name,
                        False, args.xml)
         if(args.xml):
             return common.format_xml(res)
         return common.format_json_object(res)
+    except SOSError as e:
+        raise e
+
+def show_exports_parser(subcommand_parsers, common_parser):
+    show_exports_parser = subcommand_parsers.add_parser('show-exports',
+                                description='ViPR Filesystem Show exports CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Show export details of filesystem')
+    mandatory_args = show_exports_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                                dest='name',
+                                metavar='<filesystemname>',
+                                help='Name of Filesystem',
+                                required=True)
+    show_exports_parser.add_argument('-tenant', '-tn',
+                                metavar='<tenantname>',
+                                dest='tenant',
+                                help='Name of tenant')
+    mandatory_args.add_argument('-project', '-pr',
+                                metavar='<projectname>',
+                                dest='project',
+                                help='Name of project',
+                                required=True)
+    show_exports_parser.set_defaults(func=fileshare_exports_show)
+
+def fileshare_exports_show(args):
+    obj = Fileshare(args.ip, args.port)
+    try:
+        if(not args.tenant):
+            args.tenant = ""
+        res = obj.get_exports(args.tenant + "/" + args.project + "/" + args.name)
+        if(res):
+            return common.format_json_object(res)
     except SOSError as e:
         raise e
 
@@ -1032,7 +1203,7 @@ def fileshare_list(args):
     obj = Fileshare(args.ip, args.port)
     try:
         if(not args.tenant):
-            args.tenant=""
+            args.tenant = ""
         result = obj.list_fileshares(args.tenant + "/" + args.project)
         if(len(result) > 0):
             if(args.verbose == False):
@@ -1045,15 +1216,15 @@ def fileshare_list(args):
                        and record["vpool"]["vpool_params"]):
                         for vpool_param in record["vpool"]["vpool_params"]:
                             record[vpool_param["name"]] = vpool_param["value"]
-                        record["vpool"]=None
+                        record["vpool"] = None
                         
                 #show a short table
                 from common import TableGenerator
                 if(not args.long):
-                    TableGenerator(result, ['name', 'capacity',
+                    TableGenerator(result, ['name', 'capacity_gb',
                                             'protocols']).printTable()
                 else:
-                    TableGenerator(result, ['name', 'capacity', 'protocols', 'thinly_provisioned']).printTable()
+                    TableGenerator(result, ['name', 'capacity_gb', 'protocols', 'thinly_provisioned']).printTable()
             #show all items in json format
             else:
                 return common.format_json_object(result)
@@ -1099,8 +1270,8 @@ def fileshare_mount(args):
     obj = Fileshare(args.ip, args.port)
     try:
         if(not args.tenant):
-            args.tenant=""
-        res = obj.mount(args.tenant + "/" + args.project + "/" + args.name, 
+            args.tenant = ""
+        res = obj.mount(args.tenant + "/" + args.project + "/" + args.name,
                         args.mount_dir)
     except SOSError as e:
             raise e
@@ -1126,7 +1297,7 @@ def task_parser(subcommand_parsers, common_parser):
                                 dest='name',
                                 metavar='<filesystemname>',
                                 help='Name of filesystem')
-    task_parser.add_argument('-id', 
+    task_parser.add_argument('-id',
                             dest='id',
                             metavar='<opid>',
                             help='Operation ID')
@@ -1142,7 +1313,7 @@ def fileshare_list_tasks(args):
     obj = Fileshare(args.ip, args.port)
     try:
         if(not args.tenant):
-            args.tenant=""
+            args.tenant = ""
         if(args.id):
             res = obj.list_tasks(args.tenant + "/" + args.project, args.name, args.id)
             if(res):
@@ -1188,10 +1359,10 @@ def expand_parser(subcommand_parsers, common_parser):
                                 dest='project',
                                 help='Name of project',
                                 required=True)
-    mandatory_args.add_argument('-size','-s', 
+    mandatory_args.add_argument('-size', '-s',
                                 help='New size of filesystem: {number}[unit]. ' + 
-                                'A size suffix of K for kilobytes, M for megabytes, G for gigabytes, T for ' +
-                                'terabytes is optional.' +
+                                'A size suffix of K for kilobytes, M for megabytes, G for gigabytes, T for ' + 
+                                'terabytes is optional.' + 
                                 'Default unit is bytes.',
                                 metavar='<filesystemsize[kKmMgGtT]>',
                                 dest='size',
@@ -1210,9 +1381,9 @@ def fileshare_expand(args):
     obj = Fileshare(args.ip, args.port)
     try:
         if(not args.tenant):
-            args.tenant=""
+            args.tenant = ""
         
-        res = obj.expand(args.tenant + "/" + args.project +
+        res = obj.expand(args.tenant + "/" + args.project + 
                           "/" + args.name, size, args.sync) 
     except SOSError as e:
         raise e
@@ -1242,6 +1413,9 @@ def fileshare_parser(parent_subparser, common_parser):
 
     # show command parser
     show_parser(subcommand_parsers, common_parser)
+    
+    # show exports command parser
+    show_exports_parser(subcommand_parsers, common_parser)
 
     # export command parser
     export_parser(subcommand_parsers, common_parser)
@@ -1260,4 +1434,7 @@ def fileshare_parser(parent_subparser, common_parser):
     
     # task list command parser    
     task_parser(subcommand_parsers, common_parser)
+    
+    # unmanaged filesystem  command parser
+    unmanaged_parser(subcommand_parsers, common_parser)
 

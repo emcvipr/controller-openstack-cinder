@@ -24,6 +24,7 @@ class Volume(object):
     '''
     #Commonly used URIs for the 'Volume' module
     URI_SEARCH_VOLUMES = '/block/volumes/search?project={0}'
+    URI_SEARCH_VOLUMES_BY_PROJECT_AND_NAME='/block/volumes/search?project={0}&name={1}'
     URI_VOLUMES = '/block/volumes'
     URI_VOLUME = URI_VOLUMES + '/{0}'
     URI_VOLUME_CREATE = URI_VOLUMES + '?project={0}'
@@ -49,17 +50,24 @@ class Volume(object):
     URI_VOLUME_PROTECTION_FAILOVER	 =   '/block/volumes/{0}/protection/continuous/failover'
     URI_VOLUME_PROTECTION_DELETE       =   '/block/volumes/{0}/protection/continuous/deactivate'
 	
-    #Mirror protection REST APIs
-    URI_VOLUME_PROTECTION_MIRROR		 =   '/block/volumes/{0}/protection/mirrors'
-    URI_VOLUME_PROTECTION_MIRROR_INSTANCE	 =   '/block/volumes/{0}/protection/mirrors/{1}'
-    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_PAUSE	     =   '/block/volumes/{0}/protection/mirrors/{1}/pause'
-    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_DEACTIVATE =   '/block/volumes/{0}/protection/mirrors/{1}/deactivate' 	
+    '''continuous copy or Mirror protection REST APIs '''
+    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_START      = "/block/volumes/{0}/protection/continuous-copies/start"
+    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_STOP       = "/block/volumes/{0}/protection/native/continuous-copies/stop"
+    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_STOP_PID   = "/block/volumes/{0}/protection/native/continuous-copies/{1}/stop/"
+    URI_VOLUME_PROTECTION_MIRROR_LIST                = "/block/volumes/{0}/protection/continuous-copies"
+    URI_VOLUME_PROTECTION_MIRROR_MID_SHOW            = "/block/volumes/{0}/protection/continuous-copies/{1}"
+    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_PAUSE      = "/block/volumes/{0}/protection/continuous-copies/{1}/pause?sync={2}"
+
+    URI_VOLUME_PROTECTION_MIRROR_INSTANCE_DEACTIVATE = "/block/volumes/{0}/protection/continuous-copies/{1}/deactivate"
+    URI_VOLUME_PROTECTION_MIRROR_FULLCOPY            = "/block/volumes/{0}/protection/full-copies" 	
 
     #Protection set REST APIs
     URI_VOLUME_PROTECTIONSET_INSTANCE          = '/block/protection-sets/{0}'
     URI_VOLUME_PROTECTIONSET_RESOURCES	       = '/block/protection-sets/{0}/resources'
     URI_VOLUME_PROTECTIONSET_DISCOVER	       = '/block/protection-sets/{0}/discover'
- 
+
+    URI_UNMANAGED_VOLUMES_SHOW = '/vdc/unmanaged/volumes/{0}' 
+    URI_UNMANAGED_VOLUMES_INGEST = '/vdc/unmanaged/volumes/ingest'
     #Protection REST APIs - clone  
     URI_VOLUME_PROTECTION_FULLCOPIES =   '/block/volumes/{0}/protection/full-copies'     
        
@@ -96,6 +104,15 @@ class Volume(object):
             if(volume):
                 volumes.append(volume)
         return volumes
+    
+    '''
+    Given the project name and volume name, the search will be performed to find
+    if the volume with the given name exists or not. If found, the uri of the volume
+    will be returned
+    '''
+    def search_by_project_and_name(self, projectName, volumeName):
+        
+        return common.search_by_project_and_name(projectName, volumeName, Volume.URI_SEARCH_VOLUMES_BY_PROJECT_AND_NAME, self.__ipAddr, self.__port)        
          
 
     def search_volumes(self, project_uri):
@@ -190,38 +207,39 @@ class Volume(object):
         o = common.json_decode(s)
         return o
 
-    def mirror_protection_create(self, volume, mirrorvol, inactive):
-	'''
-        This function is to do different action on mirror protection for given volume
+    def mirror_protection_create(self, volume, mirrorvolname, count):
+        '''
+        Creating or attaching a name blockmirror volume to a volume name
         Parameters:
             volume: Name of the volume
-			operation: one of value in [ create, pause, list, show or delete]
-			mirrorvol: Name of the mirror volume
+            mirrorvolname: name of mirror volume or label
+            count: Name of the mirror volume
         Returns:
             result of the action.
         '''
         
         vol_uri = self.volume_query(volume)
-		
-	parms = {
-             'name' : mirrorvol,
-             'create_inactive' : inactive
-            }
-			
+        
+        parms = {
+        'name' : mirrorvolname,
+        }
+        
+        if(count):
+            parms['count'] = count
+        
         body = json.dumps(parms)
+
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "POST",
-                                             Volume.URI_VOLUME_PROTECTION_MIRROR.format(vol_uri),
-                                             body)			
+                                    "POST",
+                                    Volume.URI_VOLUME_PROTECTION_MIRROR_INSTANCE_START.format(vol_uri),
+                                    body)            
         return common.json_decode(s)
 		
     def mirror_protection_list(self, volume):
 	'''
-        This function is to do different action on mirror protection for given volume
+        block mirror list for a given volume name        
         Parameters:
             volume: Name of the volume
-			operation: one of value in [ create, pause, list, show or delete]
-			mirrorvol: Name of the mirror volume
         Returns:
             result of the action.
         '''
@@ -229,9 +247,10 @@ class Volume(object):
 
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "GET",
-                                             Volume.URI_VOLUME_PROTECTION_MIRROR.format(vol_uri),
+                                             Volume.URI_VOLUME_PROTECTION_MIRROR_LIST.format(vol_uri),
                                              None)			
 	o = common.json_decode(s)
+
         mirrorlist = []
         for uri in  common.get_node_value(o,'mirror'):
             mirrorlist.append(uri['id'])
@@ -239,51 +258,66 @@ class Volume(object):
 	
     def mirror_protection_show(self, volume, mirrorvol):
 	'''
-        This function is to do different action on mirror protection for given volume
+        show name of blockmirror details'
         Parameters:
-            volume: Name of the volume
-			operation: one of value in [ create, pause, list, show or delete]
+            volume   : Name of the volume
 			mirrorvol: Name of the mirror volume
+
         Returns:
             result of the action.
         '''
         vol_uri = self.volume_query(volume)
-	mir_vol = self.mirror_volume_query(volume, mirrorvol)
-		
+        uris = self.mirror_protection_list(volume)
+        for mirror_uri in uris:
+            mirvol = self.get_uri_mirror_protection_vol(vol_uri, mirror_uri)
+            
+            if(mirvol != None and mirvol["name"] == mirrorvol):
+                return mirvol
+            else:
+                mirvol = None
+
+    '''
+        get block mirror volume details by mirror volume uri
+        Parameters:
+            volume uri   : Name of the volume
+            mirrorvol uri: Name of the mirror volume
+
+        Returns:
+            result of the action.
+        '''
+    def get_uri_mirror_protection_vol(self, vol_uri, mirror_uri):
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "GET",
-                                             Volume.URI_VOLUME_PROTECTION_MIRROR_INSTANCE.format(vol_uri, mir_vol),
-                                             None)			
+                                             Volume.URI_VOLUME_PROTECTION_MIRROR_MID_SHOW.format(vol_uri, mirror_uri),
+                                             None)            
         o = common.json_decode(s)
         if(o['inactive']):
             return None
         return o
+        
     
     def mirror_protection_pause(self, volume, mirrorvol):
 	'''
-        This function is to do different action on mirror protection for given volume
+        pause the block mirror volume, which is attached to name volume
         Parameters:
-            volume: Name of the volume
-			operation: one of value in [ create, pause, list, show or delete]
+            volume   : Name of the volume
 			mirrorvol: Name of the mirror volume
         Returns:
             result of the action.
         '''
         vol_uri = self.volume_query(volume)
 	mir_vol = self.mirror_volume_query(volume, mirrorvol)
-
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "POST",
-                                             Volume.URI_VOLUME_PROTECTION_MIRROR_INSTANCE_PAUSE.format(vol_uri, mir_vol),
+                                             Volume.URI_VOLUME_PROTECTION_MIRROR_INSTANCE_PAUSE.format(vol_uri, mir_vol, True),
                                              None)			
         return common.json_decode(s)	
 	
     def mirror_protection_delete(self, volume, mirrorvol):
 	'''
-        This function is to do different action on mirror protection for given volume
+	    deleting a block mirror volume
         Parameters:
             volume: Name of the volume
-			operation: one of value in [ create, pause, list, show or delete]
 			mirrorvol: Name of the mirror volume
         Returns:
             result of the action.
@@ -296,14 +330,45 @@ class Volume(object):
                                              Volume.URI_VOLUME_PROTECTION_MIRROR_INSTANCE_DEACTIVATE.format(vol_uri, mir_vol),
                                              None)			
         return common.json_decode(s)
+
+    def mirror_protection_copy(self, volume, copyname, count):
+        '''
+        This function is to do different action on mirror protection for given volume
+        Parameters:
+            volume: Name of the volume
+            operation: one of value in [ create, pause, list, show ,delete or copy]
+            mirrorvol: Name of the mirror volume
+        Returns:
+            result of the action.
+        '''
+        body = None
+        vol_uri = self.volume_query(volume)
+        if(copyname):
+            parms = {
+                     'name'  : copyname,
+                }
+        if(count):
+            parms['count'] = count
+        body = json.dumps( parms ) 
+
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Volume.URI_VOLUME_PROTECTION_MIRROR_FULLCOPY.format(vol_uri),
+                                             body)            
+        return common.json_decode(s)    
+
 		
     def mirror_volume_query(self, volume, mirrorvolname):
 	if (common.is_uri(mirrorvolname)):
             return mirrorvolname
 			
+        vol_uri = self.volume_query(volume)
 	uris = self.mirror_protection_list(volume)
 	for uri in uris:
-	    mirvol = self.mirror_protection_show(volume, uri)
+
+            mirvol = self.get_uri_mirror_protection_vol(vol_uri, uri)
+            
 	    if(mirvol != None and mirvol['name'] == mirrorvolname):
 		return mirvol['id']
 	    
@@ -438,29 +503,51 @@ class Volume(object):
         if(inactive == True):
             return None
         return o
-    
-    def get_volume_ids(self, project_uri, label, number_of_volumes):
+
+    def unmanaged_volume_ingest(self, tenant, project,
+                                varray, vpool, volumes):
+        '''
+        This function is to ingest given unmanaged volumes
+        into ViPR. 
+        '''
+        from project import Project
+        proj_obj = Project(self.__ipAddr, self.__port)
+        project_uri  = proj_obj.project_query(tenant + "/" + project)
+         
+        from virtualpool import VirtualPool
+        vpool_obj = VirtualPool(self.__ipAddr, self.__port)
+        vpool_uri = vpool_obj.vpool_query(vpool, "block")
+
+        from virtualarray import VirtualArray
+        varray_obj = VirtualArray(self.__ipAddr, self.__port)
+        varray_uri = varray_obj.varray_query(varray) 
         
+        request = {
+             'vpool' : vpool_uri,
+             'varray' : varray_uri,
+             'project' : project_uri,
+             'unmanaged_volume_list' : volumes
+            }
+
+        body = json.dumps(request)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Volume.URI_UNMANAGED_VOLUMES_INGEST,
+                                             body)
+        o = common.json_decode(s)       
+        return o
+ 
+    def unmanaged_volume_show(self, volume):
+        '''
+        This function is to show the details of unmanaged volumes
+        from  ViPR.
+        '''
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
                                              "GET",
-                                             Volume.URI_SEARCH_VOLUMES.format(project_uri),
+                                             Volume.URI_UNMANAGED_VOLUMES_SHOW.format(volume),
                                              None)
         o = common.json_decode(s)
-        if not o:
-            return []
-
-        vol_ids=[]
-        resources = common.get_node_value(o, "resource")
-#        for resource in resources:
-#            if(resource["resource_type"]=="volume"):
-#                volumes.append(resource)
-        
-        for index in range(number_of_volumes):
-            for vol in resources:
-                if(vol["name"]==label + "-" + str(index + 1)):
-                    vol_ids.append(vol["id"])
-        
-        return vol_ids
+        return o
                 
         
     
@@ -480,54 +567,11 @@ class Volume(object):
         Returns:
             Created task details in JSON response payload
         '''
-        name = project + '/' + label
+
         
         from project import Project
         proj_obj = Project(self.__ipAddr, self.__port)
         project_uri  = proj_obj.project_query(project)
-        
-        if(number_of_volumes and number_of_volumes > 1):
-            for vol_id in self.get_volume_ids(project_uri, label, number_of_volumes):
-                volume = self.show_by_uri(vol_id, True)
-                if(volume):
-                    if(volume["inactive"]):
-                        pass
-                    elif(volume["inactive"] == False):
-                        raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                               "Volume with name: " + volume["name"] + 
-                               " already exists")
-                    else:
-                        tasks = self.show_task_by_uri(vol_id)
-                        for task in tasks:
-                            if(task['state'] in ["pending", "ready"]):
-                                raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                                               "Volume with name: " + task["resource"]["name"] + 
-                                               " already exists. Associated task[" + task["op_id"] 
-                                               + "] is in " + task['state'] +" state")
-                            
-        else:
-            try:
-                volume = self.show(name, True)
-                if(volume):
-                    if(volume["inactive"]):
-                        pass
-                    elif(volume["inactive"] == False):
-                        raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                               "Volume with name: " + volume["name"] + 
-                               " already exists")
-                    else:
-                        tasks = self.show_task_by_uri(volume["id"])
-                        for task in tasks:
-                            if(task['state'] in ["pending", "ready"]):
-                                raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                                       "Volume with name: " + task["resource"]["name"] + 
-                                       " already exists. Associated task[" + task["op_id"] 
-                                       + "] is in " + task['state'] +" state")
-            except SOSError as e:
-                if(e.err_code==SOSError.NOT_FOUND_ERR):
-                    pass
-                else:
-                    raise e
                 
         
         from virtualpool import VirtualPool
@@ -549,7 +593,7 @@ class Volume(object):
              'size' : size,
              'varray' : varray_uri,
              'project' : project_uri,
-             'vpool' :  vpool_uri
+             'vpool' : vpool_uri
             }
         if(protocol):
             request["protocols"] = protocol
@@ -562,8 +606,9 @@ class Volume(object):
         if (consistent_volume_label):
             consistent_volume_uri = self.volume_query(project + '/' + consistent_volume_label)
             request['snapshot_consistent_with'] =  consistent_volume_uri 
+        from consistencygroup import ConsistencyGroup
         if(consistencygroup):
-            from consistencygroup import ConsistencyGroup
+            
             cgobj = ConsistencyGroup(self.__ipAddr, self.__port)
             (tenant, project) = common.get_parent_child_from_xpath(project)
             consuri = cgobj.consistencygroup_query(consistencygroup, project, tenant )
@@ -579,9 +624,13 @@ class Volume(object):
         o = common.json_decode(s)
         if(sync):
             if(number_of_volumes < 2):
-                task = o["task"][0]
-                return self.block_until_complete(task["resource"]["id"], 
-                                             task["op_id"])
+                #check task empty
+                if (len(o["task"]) > 0):
+                    task = o["task"][0]
+                    return self.block_until_complete(task["resource"]["id"], 
+                                                 task["op_id"])
+                else:
+                    raise SOSError(SOSError.SOS_FAILURE_ERR, "error: task list is empty, no task response found")
         else:
             return o
 
@@ -1160,7 +1209,7 @@ def volume_create(args):
                            SOSError.ENTRY_ALREADY_EXISTS_ERR]):
             raise SOSError(e.err_code, "Create failed: " + e.err_text)
         else:
-            raise e
+            raise common.format_err_msg_and_raise("create", "volume", e.err_text, e.err_code)
 
 # volume Update routines
 
@@ -1262,8 +1311,9 @@ def volume_delete(args):
         if (e.err_code == SOSError.NOT_FOUND_ERR):
             raise SOSError(e.err_code, "Delete failed: " + e.err_text)
         else:
-            raise e
+            raise common.format_err_msg_and_raise("delete", "volume", e.err_text, e.err_code)
         
+
 
 # Volume Export routines
 def export_parser(subcommand_parsers, common_parser):
@@ -1434,7 +1484,82 @@ def volume_show(args):
             return common.format_xml(res)
         return common.format_json_object(res)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("show", "volume", e.err_text, e.err_code)
+
+
+# Volume ingest routines
+
+def unmanaged_parser(subcommand_parsers, common_parser):
+    unmanaged_parser = subcommand_parsers.add_parser('unmanaged',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Unmanaged volume operations')
+    subcommand_parsers = unmanaged_parser.add_subparsers(help='Use one of the commands')
+
+    #ingest unmanaged volume
+    ingest_parser=subcommand_parsers.add_parser('ingest',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='ingest unmanaged volumes into ViPR')
+    mandatory_args = ingest_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-vpool', '-vp',
+                                metavar='<vpool>',
+                                dest='vpool',
+                                help='Name of vpool',
+                                required=True)
+    ingest_parser.add_argument('-tenant', '-tn',
+                                metavar='<tenantname>',
+                                dest='tenant',
+                                help='Name of tenant')
+    mandatory_args.add_argument('-project', '-pr',
+                                metavar='<projectname>',
+                                dest='project',
+                                help='Name of project',
+                                required=True)
+    mandatory_args.add_argument('-varray', '-va',
+                                metavar='<varray>',
+                                dest='varray',
+                                help='Name of varray',
+                                required=True)
+    mandatory_args.add_argument('-volumes', '-vol',
+                                metavar='<volumes>',
+                                dest='volumes',
+                                help='Name or id of volume',
+                                nargs='+',
+                                required=True)
+
+    #show unmanaged volume
+    umshow_parser=subcommand_parsers.add_parser('show',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Show unmanaged volume')
+    mandatory_args = umshow_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-volume', '-vol',
+                                metavar='<volume>',
+                                dest='volume',
+                                help='Name or id of volume',
+                                required=True)
+
+    ingest_parser.set_defaults(func=unmanaged_volume_ingest)
+
+    umshow_parser.set_defaults(func=unmanaged_volume_show)
+
+def unmanaged_volume_ingest(args):
+    obj = Volume(args.ip, args.port)
+    try:
+        if(not args.tenant):
+            args.tenant=""
+        res = obj.unmanaged_volume_ingest(args.tenant, args.project, 
+                             args.varray, args.vpool, args.volumes)
+    except SOSError as e:
+        raise common.format_err_msg_and_raise("ingest", "unmanaged", e.err_text, e.err_code)
+
+def unmanaged_volume_show(args):
+    obj = Volume(args.ip, args.port)
+    try:
+        res = obj.unmanaged_volume_show(args.volume)
+    except SOSError as e:
+        raise common.format_err_msg_and_raise("show", "unmanaged", e.err_text, e.err_code)
 
 
 # Volume protection routines
@@ -1618,7 +1743,7 @@ def volume_protect_create(args):
                        "create",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("create", "protection", e.err_text, e.err_code)
 
 def volume_protect_start(args):
     obj = Volume(args.ip, args.port)
@@ -1629,7 +1754,7 @@ def volume_protect_start(args):
                        "start",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("start", "protection", e.err_text, e.err_code)
 
 def volume_protect_stop(args):
     obj = Volume(args.ip, args.port)
@@ -1640,7 +1765,7 @@ def volume_protect_stop(args):
                        "stop",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("stop", "protection", e.err_text, e.err_code)
 
 def volume_protect_pause(args):
     obj = Volume(args.ip, args.port)
@@ -1651,7 +1776,7 @@ def volume_protect_pause(args):
                        "pause",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("pause", "protection", e.err_text, e.err_code)
 
 def volume_protect_resume(args):
     obj = Volume(args.ip, args.port)
@@ -1662,7 +1787,7 @@ def volume_protect_resume(args):
                        "resume",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("resume", "protection", e.err_text, e.err_code)
 
 def volume_protect_failover(args):
     obj = Volume(args.ip, args.port)
@@ -1673,7 +1798,7 @@ def volume_protect_failover(args):
                        "failover",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("failover", "protection", e.err_text, e.err_code)
 
 def volume_protect_delete(args):
     obj = Volume(args.ip, args.port)
@@ -1684,7 +1809,7 @@ def volume_protect_delete(args):
                        "delete",
                        args.local, args.remote)
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("delete", "protection", e.err_text, e.err_code)
 
 
 
@@ -1706,7 +1831,7 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-name', '-n',
                                 metavar='<volumename>',
                                 dest='name',
-                                help='Name of Volume',
+                                help='Name of Volume or Source volume name',
                                 required=True)
     mptcreate_parser.add_argument('-tenant', '-tn',
                                 metavar='<tenantname>',
@@ -1718,13 +1843,14 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
                                 help='Name of project',
                                 required=True)
     mandatory_args.add_argument('-mirrorvol', '-mv',
-                                metavar='<mirrorvol>',
+                                metavar='<mirrorvolumelabel>',
                                 dest='mirrorvol',
-                                help='Name of Mirror volume')
-    mptcreate_parser.add_argument( '-inactive',
-                               dest='inactive',
-                               action='store_true',
-                               help='Create mirror volume with protection in inactive state')							
+                                help='Name of Mirror volume or label of mirror volume',
+                                required=True)
+    mptcreate_parser.add_argument('-count', '-c',
+                                metavar='<count>',
+                                dest='count',
+                                help='Maximum number of continuous copies')
     
     mptcreate_parser.set_defaults(func=volume_mirror_protect_create)
 
@@ -1732,12 +1858,12 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mptshow_parser=subcommand_parsers.add_parser('show',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Create mirror protection for given volume')
+                                help='Show mirror protection for given volume')
     mandatory_args = mptshow_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-name', '-n',
                                 metavar='<volumename>',
                                 dest='name',
-                                help='Name of Volume',
+                                help='Name of Volume or Source volume name',
                                 required=True)
     mptshow_parser.add_argument('-tenant', '-tn',
                                 metavar='<tenantname>',
@@ -1751,7 +1877,8 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-mirrorvol', '-mv',
                                 metavar='<mirrorvol>',
                                 dest='mirrorvol',
-                                help='Name of Mirror volume')
+                                help='Name of Mirror volume',
+                                required=True)
 
     mptshow_parser.set_defaults(func=volume_mirror_protect_show)
 
@@ -1764,7 +1891,7 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-name', '-n',
                                 metavar='<volumename>',
                                 dest='name',
-                                help='Name of Volume',
+                                help='Name of Volume or Source volume name',
                                 required=True)
     mptpause_parser.add_argument('-tenant', '-tn',
                                 metavar='<tenantname>',
@@ -1778,7 +1905,8 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-mirrorvol', '-mv',
                                 metavar='<mirrorvol>',
                                 dest='mirrorvol',
-                                help='Name of Mirror volume')
+                                help='Name of Mirror volume',
+                                required=True)
 
     mptpause_parser.set_defaults(func=volume_mirror_protect_pause)
    
@@ -1791,7 +1919,7 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-name', '-n',
                                 metavar='<volumename>',
                                 dest='name',
-                                help='Name of Volume',
+                                help='Name of Volume or source volume name',
                                 required=True)
     mptdelete_parser.add_argument('-tenant', '-tn',
                                 metavar='<tenantname>',
@@ -1805,7 +1933,8 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-mirrorvol', '-mv',
                                 metavar='<mirrorvol>',
                                 dest='mirrorvol',
-                                help='Name of Mirror volume')
+                                help='Name of Mirror volume',
+                                required=True)
     
     mptdelete_parser.set_defaults(func=volume_mirror_protect_delete)
 
@@ -1813,7 +1942,7 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
     mptlist_parser=subcommand_parsers.add_parser('list',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Create mirror protection for given volume')
+                                help='List mirror protection for given volume')
     mandatory_args = mptlist_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-name', '-n',
                                 metavar='<volumename>',
@@ -1831,6 +1960,40 @@ def mirror_protect_parser(subcommand_parsers, common_parser):
                                 required=True)
 
     mptlist_parser.set_defaults(func=volume_mirror_protect_list)
+    
+        #copy continuous protection
+    mptcopy_parser=subcommand_parsers.add_parser('copy',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Copy full copy of volume or local copy of a volume')
+    mandatory_args = mptcopy_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                                metavar='<volumename>',
+                                dest='name',
+                                help='Name of Volume or Source volume name',
+                                required=True)
+    mptcopy_parser.add_argument('-tenant', '-tn',
+                                metavar='<tenantname>',
+                                dest='tenant',
+                                help='Name of tenant')
+    mandatory_args.add_argument('-project', '-pr',
+                                metavar='<projectname>',
+                                dest='project',
+                                help='Name of project',
+                                required=True)
+    
+    mandatory_args.add_argument('-copyname', '-cp',
+                                metavar='<volumecopyname>',
+                                dest='copyname',
+                                help='Name of full copy of volume',
+                                required=True)
+    mptcopy_parser.add_argument('-count', '-cu',
+                                metavar='<count>',
+                                dest='count',
+                                help='no of copyies')
+
+    mptcopy_parser.set_defaults(func=volume_mirror_protect_copy)
+
 
 
 def volume_mirror_protect_create(args):
@@ -1838,22 +2001,22 @@ def volume_mirror_protect_create(args):
     try:
         if(not args.tenant):
             args.tenant=""
-        res = obj.mirror_protection_create(args.tenant + "/" + args.project + "/" + args.name,
-                       args.mirrorvol, args.inactive)
+        fullpathvol = args.tenant + "/" + args.project + "/" + args.name
+        obj.mirror_protection_create(fullpathvol, args.mirrorvol, args.count)
 			
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("create", "mirror_protection", e.err_text, e.err_code)
 
 def volume_mirror_protect_delete(args):
     obj = Volume(args.ip, args.port)
     try:
         if(not args.tenant):
             args.tenant=""
-        res = obj.mirror_protection_delete(args.tenant + "/" + args.project + "/" + args.name,
-                       args.mirrorvol)
+        fullpathvol = args.tenant + "/" + args.project + "/" + args.name
+        obj.mirror_protection_delete(fullpathvol, args.mirrorvol)
 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("delete", "mirror_protection", e.err_text, e.err_code)
 
 def volume_mirror_protect_list(args):
     obj = Volume(args.ip, args.port)
@@ -1861,10 +2024,11 @@ def volume_mirror_protect_list(args):
         if(not args.tenant):
             args.tenant=""
         res = obj.mirror_protection_list(args.tenant + "/" + args.project + "/" + args.name)
+
         mirrorlist = []
-        for uri in res:
-            protectobj = obj.mirror_protection_show(args.tenant + "/" + args.project + "/" + args.name,
-                    uri)
+        vol_uri = obj.volume_query(args.tenant + "/" + args.project + "/" + args.name)
+        for mirr_uri in res:
+            protectobj = obj.get_uri_mirror_protection_vol(vol_uri, mirr_uri)
             nhid = None
             if(protectobj != None):
                 if("source" in protectobj and "name" in protectobj["source"]):
@@ -1887,30 +2051,43 @@ def volume_mirror_protect_list(args):
             TableGenerator(mirrorlist, ['name', 'source_volume', 'varray_name', 'protocols', 'storagesystem_name']).printTable()
 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("list", "mirror_protection", e.err_text, e.err_code)
 
 def volume_mirror_protect_show(args):
     obj = Volume(args.ip, args.port)
     try:
         if(not args.tenant):
             args.tenant=""
-        res = obj.mirror_protection_show(args.tenant + "/" + args.project + "/" + args.name,
-                    args.mirrorvol)
+        fullpathvol = args.tenant + "/" + args.project + "/" + args.name
+        res = obj.mirror_protection_show(fullpathvol, args.mirrorvol)
         return common.format_json_object(res)
 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("show", "mirror_protection", e.err_text, e.err_code)
 
 def volume_mirror_protect_pause(args):
     obj = Volume(args.ip, args.port)
     try:
         if(not args.tenant):
             args.tenant=""
-        res = obj.mirror_protection_pause(args.tenant + "/" + args.project + "/" + args.name,
-                   args.mirrorvol)
+        fullpathvol = args.tenant + "/" + args.project + "/" + args.name
+        obj.mirror_protection_pause( fullpathvol, args.mirrorvol)
+
 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("pause", "mirror_protection", e.err_text, e.err_code)
+
+def volume_mirror_protect_copy(args):
+    obj = Volume(args.ip, args.port)
+    try:
+        if(not args.tenant):
+            args.tenant=""
+        fullpathvol = args.tenant + "/" + args.project + "/" + args.name
+        obj.mirror_protection_copy(fullpathvol, args.copyname, args.count)
+    
+    except SOSError as e:
+        raise common.format_err_msg_and_raise("copy", "mirror_protection", e.err_text, e.err_code)
+
 
 # Volume protection set routines
 
@@ -1918,7 +2095,7 @@ def protectionset_parser(subcommand_parsers, common_parser):
     protectionset_parser = subcommand_parsers.add_parser('protectionset',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Mirror protect operations of the volume')
+                                help='Protectionset operations of the volume')
     subcommand_parsers = protectionset_parser.add_subparsers(help='Use one of the commands')
 
     #protection set get resources
@@ -2003,7 +2180,7 @@ def volume_protectionset_getresources(args):
 	    return common.format_json_object(res) 		   
 			
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("get_resources", "protectionset", e.err_text, e.err_code)
 
 def volume_protectionset_discover(args):
     obj = Volume(args.ip, args.port)
@@ -2013,7 +2190,7 @@ def volume_protectionset_discover(args):
         res = obj.protectionset_discover(args.tenant + "/" + args.project + "/" + args.name)
 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("discover", "protectionset", e.err_text, e.err_code)
 
 def volume_protectionset_show(args):
     obj = Volume(args.ip, args.port)
@@ -2024,7 +2201,7 @@ def volume_protectionset_show(args):
         return common.format_json_object(res)
 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("show", "protectionset", e.err_text, e.err_code)
 
 
 # Volume List routines
@@ -2084,7 +2261,7 @@ def volume_list(args):
         else:
             return
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("list", "volume", e.err_text, e.err_code)
 
 
 def task_parser(subcommand_parsers, common_parser):
@@ -2149,7 +2326,7 @@ def volume_list_tasks(args):
                     return common.format_json_object(res)
         
     except SOSError as e:
-            raise e
+        raise common.format_err_msg_and_raise("tasks", "volume", e.err_text, e.err_code)
 
 
 def expand_parser(subcommand_parsers, common_parser):
@@ -2198,7 +2375,7 @@ def volume_expand(args):
         res = obj.expand(args.tenant + "/" + args.project +
                           "/" + args.name, size, args.sync) 
     except SOSError as e:
-        raise e
+        raise common.format_err_msg_and_raise("expand", "volume", e.err_text, e.err_code)
 #
 # Volume Main parser routine
 #
@@ -2247,4 +2424,6 @@ def volume_parser(parent_subparser, common_parser):
 
     # protection set  command parser
     protectionset_parser(subcommand_parsers, common_parser)
-   
+  
+    # unmanaged volume  command parser 
+    unmanaged_parser(subcommand_parsers, common_parser) 

@@ -38,12 +38,16 @@ import networksystem
 import network
 import sysmanager
 #import objectpool
+import vcenter
+import vcenterdatacenter
 import objectuser
 import objectcos
 import secretkeyuser
 import protectionsystem
 import consistencygroup
 import host
+import hostinitiators
+import hostipinterfaces
 import cluster
 import openstack
 
@@ -119,12 +123,18 @@ storagepool.storagepool_parser(module_parsers, common_parser)
 metering.meter_parser(module_parsers, common_parser)
 monitoring.monitor_parser(module_parsers, common_parser)
 storagesystem.storagesystem_parser(module_parsers, common_parser)
+host.host_parser(module_parsers, common_parser)
+hostinitiators.initiator_parser(module_parsers, common_parser)
+hostipinterfaces.ipinterface_parser(module_parsers, common_parser)
+cluster.cluster_parser(module_parsers, common_parser)
 virtualarray.varray_parser(module_parsers, common_parser)
 storageport.storageport_parser(module_parsers, common_parser)
 exportgroup.exportgroup_parser(module_parsers, common_parser)
 sysmanager.system_parser(module_parsers, common_parser)
 protectionsystem.protectionsystem_parser(module_parsers, common_parser)
 #objectpool.objectpool_parser(module_parsers, common_parser)
+vcenter.vcenter_parser(module_parsers, common_parser)
+vcenterdatacenter.vcenterdatacenter_parser(module_parsers, common_parser)
 objectuser.objectuser_parser(module_parsers, common_parser)
 objectcos.objectcos_parser(module_parsers, common_parser)
 secretkeyuser.secretkeyuser_parser(module_parsers, common_parser)

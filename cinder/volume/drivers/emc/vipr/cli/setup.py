@@ -44,7 +44,13 @@ distutils.core.setup(
 			'objectuser.py',
 			'objectcos.py',
 			'secretkeyuser.py',
-                        'consistencygroup.py'
+            'consistencygroup.py',
+            'host.py',
+            'hostinitiators.py',
+            'hostipinterfaces.py',
+            'cluster.py',
+            'vcenter.py',
+            'vcenterdatacenter.py'
 
 			 
 		    ]

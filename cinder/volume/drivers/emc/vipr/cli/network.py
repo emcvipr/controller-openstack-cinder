@@ -26,6 +26,10 @@ class Network(object):
     URI_NETWORK_ENDPOINT = URI_NETWORK_ENDPOINTS + '/{1}'
     URI_VIRTUALARRAY_NETWORK = '/vdc/varrays/{0}/networks'
     URI_NETWORK_DEACTIVATE = '/vdc/networks/{0}/deactivate'
+    URI_NETWORK_REGISTER = '/vdc/networks/{0}/register'
+    URI_NETWORK_DEREGISTER = '/vdc/networks/{0}/deregister'
+
+
     
     def __init__(self, ipAddr, port):
         '''
@@ -294,7 +298,7 @@ class Network(object):
     # adds an endpoint to a network
     def add_endpoint(self, varray, name, endpoint):
         '''
-        Adds endpoint to a transport zone
+        Adds endpoint to a network
         Parameters:
             varray: name of the varray
             name: name of network
@@ -349,7 +353,7 @@ class Network(object):
                            'op' : 'remove'})
 
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "POST",
+                                             "PUT",
                                              Network.URI_NETWORK_ENDPOINTS.format(network_uri),
                                              body)
         o = common.json_decode(s)
@@ -360,7 +364,7 @@ class Network(object):
     # Removes an endpoint from a network
     def remove_endpoint2(self, varray, name, endpoint):
         '''
-        Removes endpoint from a transport zone
+        Removes endpoint from a network
         Parameters:
             varray: name of the varray
             name: name of network
@@ -421,6 +425,40 @@ class Network(object):
                     return tzone['id']  
         raise SOSError(SOSError.NOT_FOUND_ERR, "Transport-zone " + 
                         name + ": not found")
+
+
+    def register(self, varray, name):
+        '''
+        register a network
+        Parameters:
+            varray: name of the varray
+            name: name of network
+        '''
+
+        network_uri = self.network_query(name, varray)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Network.URI_NETWORK_REGISTER.format(network_uri),
+                                             None)
+        o = common.json_decode(s)
+        return o
+
+
+    def deregister(self, varray, name):
+        '''
+        register a network 
+        Parameters:
+            varray: name of the varray
+            name: name of network
+        '''
+
+        network_uri = self.network_query(name, varray)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Network.URI_NETWORK_DEREGISTER.format(network_uri),
+                                             None)
 
 
 
@@ -731,6 +769,65 @@ def remove_endpoint(args):
     except SOSError as e:
         raise e
 
+def register_parser(subcommand_parsers, common_parser):
+    register_parser = subcommand_parsers.add_parser('register',
+                                description='ViPR Network Register CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='register a network')
+    mandatory_args = register_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                                help='Name of network',
+                                metavar='<network>',
+                                dest='name',
+                                required=True)
+
+    mandatory_args.add_argument('-varray', '-va',
+                                metavar='<varray>',
+                                dest='varray',
+                                help='Name of varray',
+                                required=True)
+    register_parser.set_defaults(func=network_register)
+
+def network_register(args):
+    obj = Network(args.ip, args.port)
+    try:
+        res = obj.register(args.varray, args.name)
+    except SOSError as e:
+        common.format_err_msg_and_raise("register", "network", e.err_text, e.err_code)
+
+
+
+def deregister_parser(subcommand_parsers, common_parser):
+    deregister_parser = subcommand_parsers.add_parser('deregister',
+                                description='ViPR Network Deregister CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Deregister a network')
+    mandatory_args = deregister_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name', '-n',
+                                help='Name of network',
+                                metavar='<network>',
+                                dest='name',
+                                required=True)
+
+    mandatory_args.add_argument('-varray', '-va',
+                                metavar='<varray>',
+                                dest='varray',
+                                help='Name of varray',
+                                required=True)
+    deregister_parser.set_defaults(func=network_deregister)
+
+
+def network_deregister(args):
+    obj = Network(args.ip, args.port)
+    try:
+        res = obj.deregister(args.varray, args.name)
+    except SOSError as e:
+        common.format_err_msg_and_raise("deregister", "network", e.err_text, e.err_code)
+
+
+
 #
 # Network Main parser routine
 #
@@ -761,6 +858,12 @@ def network_parser(parent_subparser, common_parser):
 
     # varray assign command parser
     assign_parser(subcommand_parsers, common_parser)
+
+    # register network command parser
+    register_parser(subcommand_parsers, common_parser)
+
+    # deregister command parser
+    deregister_parser(subcommand_parsers, common_parser)
 
     # endpoint add/remove command parser
     endpoint_parser(subcommand_parsers, common_parser)
