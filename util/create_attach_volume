@@ -23,81 +23,240 @@ INSTNAME="instance-${DATE}"
 #get the nova image id
 IMAGE=$( nova image-list | grep "cirros-0.3.1-x86_64-uec " | tr -s ' '| cut -f2 -d' ')
 
-# Create the volume
-cinder create --display-name "${VOLNAME}"  --volume-type "${VOLUMEIDTYPE}" 1
-cinder list
+function cinder_create-volume {
+	# Create the volume
+	echo "Creating volume: ${1}"
+	cinder create --display-name "${1}"  --volume-type "${2}" 1
+	if [ "$?" -ne 0 ]; then
+	   echo "Error creating volume: ${1}"
+	   exit 1
+	fi
+		
+	cinder list
+	
+	echo "Waiting for volume '${1}' to be created"
+	STATUS="unknown"
+	while [ "${STATUS}" != "available" -a "${STATUS}" != "error" ]; do
+	   sleep 5
+	   STATUS=$( cinder list | grep "${1}" | tr -s ' ' | cut -f4 -d' ')
+	   echo -en "\rCurrent status: ${STATUS}"
+	done
+	
+	echo
+	
+	if [ "${STATUS}" == "error" ]; then
+	   echo "Error creating volume: ${VOLNAME}"
+	   exit 1
+	fi
+	
+	echo "*** volume is now available"
+	
+	#get the volume id
+	VOLUME=$( cinder list | grep "${1}" | tr -s ' ' | cut -f2 -d' ')
+}
 
-echo "Waiting for volume '${VOLNAME}' to be created"
-STATUS="unknown"
-while [ "${STATUS}" != "available" ]; do
-   sleep 5
-   STATUS=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f4 -d' ')
-done
+function cinder_delete-volume {
+	# Create the volume
+	cinder delete "${1}"
+	if [ "$?" -ne 0 ]; then
+	   echo "Error deleting volume: ${1}"
+	   exit 1
+	fi
+	
+	echo "Waiting for volume '${1}' to be deleting"
+	STATUS="unknown"
+	while [ "${STATUS}" != "" -a "${STATUS}" != "error_deleting" ]; do
+	   sleep 5
+	   LINE=$( cinder list | grep "${1}" )
+	   WC=$( echo "${LINE}" | wc -l )
+	   if [ "${WC}" == "0" ]; then
+	      STATUS="deleted"
+	   else
+	      STATUS=$( echo "${LINE}" | tr -s ' ' | cut -f4 -d' ' )
+	   fi
+	   echo -en "\rCurrent status: ${STATUS}"
+	done
+	
+	echo
+	
+	if [ "${STATUS}" == "error_deleting" ]; then
+	   echo "Error deleting volume: ${1}"
+	   exit 1
+	fi
+	
+}
 
-echo "*** volume is now available"
 
-#get the volume id
-VOLUMEID=$( cinder list | grep "${VOLNAME}" | tr -s ' ' | cut -f2 -d' ')
+function cinder_create-snapshot {
+	# Create a snapshot
+	cinder snapshot-create --display-name "${1}" "${2}" 
+	if [ "$?" -ne 0 ]; then
+	   echo "Error creating snapshot: ${1}"
+	   exit 1
+	fi
+		
+	
+	echo "Waiting for snapshot '${1}' to be created"
+	STATUS="unknown"
+	while [ "${STATUS}" != "available" -a "${STATUS}" != "error" ]; do
+	   sleep 5
+	   STATUS=$( cinder snapshot-list | grep "${1}" | tr -s ' ' | cut -f6 -d' ')
+	   echo -en "\rCurrent status: ${STATUS}"
+	done
+	
+	echo
+	
+	if [ "${STATUS}" == "error" ]; then
+	   echo "Error creating snapshot: ${1}"
+	   exit 1
+	fi
+	
+	echo "*** snapshot is now available"
+	
+	#get the volume id
+	SNAPSHOT=$( cinder snapshot-list | grep "${1}" | tr -s ' ' | cut -f2 -d' ')
+}
+
+function cinder_create-clone {
+	# Create the volume
+	cinder create --display-name "${1}"  --source-volid "${2}"  1
+	if [ "$?" -ne 0 ]; then
+	   echo "Error creating volume: ${1}"
+	   exit 1
+	fi
+		
+	echo "Waiting for clone '${1}' to be created"
+	STATUS="unknown"
+	while [ "${STATUS}" != "available" -a "${STATUS}" != "error" ]; do
+	   sleep 5
+	   STATUS=$( cinder list | grep "${1}" | tr -s ' ' | cut -f4 -d' ')
+	   echo -en "\rCurrent status: ${STATUS}"
+	done
+	
+	echo
+	
+	if [ "${STATUS}" == "error" ]; then
+	   echo "Error creating clone: ${VOLNAME}"
+	   exit 1
+	fi
+	
+	echo "*** clone is now available"
+	
+	#get the volume id
+	CLONE=$( cinder list | grep "${1}" | tr -s ' ' | cut -f2 -d' ')
+	
+}
+
+function nova_create-instance {
+	echo "Creating an instance: ${2}"
+   	nova boot --flavor m1.tiny --image ${1} ${2}
+	if [ "$?" -ne 0 ]; then
+	   echo "Error creating instance: ${2}"
+	   exit 1
+	fi
+	
+   	echo "Waiting for instance '${2}'to be created"
+   	STATUS="unknown"
+   	while [ "${STATUS}" != "ACTIVE" ]; do
+      	sleep 5
+      	STATUS=$( nova list | grep "${2}" | tr -s ' ' | cut -f6 -d' ')
+      	echo -en "\rCurrent status: ${STATUS}"
+   	done
+
+   	echo "*** instance is now available"
+
+   	#get the instance id
+   	INSTANCE=$( nova list | grep "${2}" | tr -s ' '  | cut -f2 -d' ')
+
+}
+
+function nova_attach-volume {
+	echo "Attaching volume: ${2} to instance: ${1}"
+	# ok, now attach the volume
+   	nova volume-attach ${1} ${2} ${3}
+ 
+	if [ "$?" -ne 0 ]; then
+	   echo "Error attaching volume: ${2}"
+	   exit 1
+	fi
+	
+   	echo "Waiting for volume to become attached"
+
+        # we'll know a volume is attached if we run 'cinder list'
+        # and one line contains the VOLUMEIDID and the word "in-use"
+        echo "Waiting for volume to be attached"
+        STATUS="unknown"
+        while [ "${STATUS}" != "in-use" -a "${STATUS}" != "error_attaching" ]; do
+           sleep 5
+           STATUS=$( cinder list | grep "${2}" | tr -s ' ' | cut -f4 -d' ')
+           echo -en "\rCurrent status: ${STATUS}"      
+        done
+
+	if [ "${STATUS}" == "error_attaching" ]; then
+	   echo "Error creating clone: ${VOLNAME}"
+	   exit 1
+	fi
+	
+   	echo "*** volume is now attached"
+
+}
+
+function nova_detach-volume {
+	echo "Detaching volume: ${2} to instance: ${1}"
+	# ok, now detach the volume
+   	echo "*** detaching the volume"
+   	nova volume-detach ${1} ${2}
+ 
+	if [ "$?" -ne 0 ]; then
+	   echo "Error detaching volume: ${2}"
+	   exit 1
+	fi   	
+   	
+   	
+    # and wait for it to become available
+    echo "Waiting for volume '${VOLNAME}' to be detached"
+    STATUS="unknown"
+    while [ "${STATUS}" != "available" -a "${STATUS}" != "error_detaching" ]; do
+       sleep 5
+       STATUS=$( cinder list | grep "${2}" | tr -s ' ' | cut -f4 -d' ')
+       echo -en "\rCurrent status: ${STATUS}"       
+   	done	
+ 
+	if [ "${STATUS}" == "error_detaching" ]; then
+	   echo "Error detaching volume: ${2}"
+	   exit 1
+	fi
+	
+   	echo "*** volume is now detached"
+
+}
+
+
+
+
+# main
+
+cinder_create-volume "${VOLNAME}" "${VOLUMEIDTYPE}"
 
 
 read -p "do you want to create a snapshot as well as clone the volume? [N/y] " DOSNAPCLONE
 if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
-    # create a snapshot
-    echo "Creating a snapshot"
-    cinder snapshot-create --display-name "${SNAPNAME}" "${VOLUMEID}"
-    echo "Waiting for snapshot '${SNAPNAME}' to be created"
-    STATUS="unknown"
-    while [ "${STATUS}" != "available" ]; do
-        sleep 5
-        STATUS=$( cinder snapshot-list | grep "${SNAPNAME}" | tr -s ' ' | cut -f6 -d' ')
-    done
-    #get the snapshot id
-    SNAPSHOT=$( cinder snapshot-list | grep "${SNAPNAME}" | tr -s ' ' | cut -f2 -d' ')
+	cinder_create-snapshot "${SNAPNAME}" "${VOLUME}"
 
     # create a clone
-    echo "Creating a clone"
-    cinder create --source-volid "${VOLUMEID}" --display-name "${CLONENAME}" 1
-    echo "Waiting for clone '${CLONENAME}' to be created"
-    STATUS="unknown"
-    while [ "${STATUS}" != "available" ]; do
-        sleep 5
-        STATUS=$( cinder list | grep "${CLONENAME}" | tr -s ' ' | cut -f4 -d' ')
-    done
-    #get the clone id
-    CLONE=$( cinder list | grep "${CLONENAME}" | tr -s ' ' | cut -f2 -d' ')
+    cinder_create-clone  "${CLONENAME}" "${VOLUME}"
 fi
 
 
 read -p "do you want to create an instance and attach a the volume to it? [N/y] " ATTACH
 if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
 
-   echo "Creating an instance: ${INSTNAME}"
-   nova boot --flavor m1.tiny --image ${IMAGE} ${INSTNAME}
-   nova list
-
-   echo "Waiting for instance '${INSTNAME}'to be created"
-   STATUS="unknown"
-   while [ "${STATUS}" != "ACTIVE" ]; do
-      sleep 5
-      STATUS=$( nova list | grep "${INSTNAME}" | tr -s ' ' | cut -f6 -d' ')
-   done
-
-   echo "*** instance is now available"
-
-   #get the instance id
-   INSTANCE=$( nova list | grep "${INSTNAME}" | tr -s ' '  | cut -f2 -d' ')
+   # create the instance
+   nova_create-instance "${IMAGE}" "${INSTNAME}"
 
    # ok, now attach the volume
-   nova volume-attach ${INSTANCE} ${VOLUMEID} ${MNT}
+   nova_attach-volume ${INSTANCE} ${VOLUME} ${MNT}
 
-   # we'll know a volume is attached if we run 'cinder list'
-   # and one line contains the VOLUMEIDID and the word "in-use"
-   echo "Waiting for volume to be attached"
-   STATUS="unknown"
-   while [ "${STATUS}" != "in-use" ]; do
-      sleep 5
-      STATUS=$( cinder list | grep "${VOLUMEID}" | tr -s ' ' | cut -f4 -d' ')
-   done
 fi
 
 
@@ -133,15 +292,7 @@ read -p "Press [Enter] to continue and delete all created volumes, snapshot, ima
 
 if [ "${ATTACH}" == "y" -o "${ATTACH}" == "Y" ]; then
    # detach the volume
-   echo "*** detaching the volume"
-   nova volume-detach ${INSTANCE} ${VOLUMEID}
-   # and wait for it to become available
-   echo "Waiting for volume '${VOLNAME}' to be detached"
-   STATUS="unknown"
-   while [ "${STATUS}" != "available" ]; do
-      sleep 5
-      STATUS=$( cinder list | grep "${VOLUMEID}" | tr -s ' ' | cut -f4 -d' ')
-   done
+   nova_detach-volume ${INSTANCE} ${VOLUME}
    
    # and the instance
    echo "*** deleting the instance"
@@ -160,14 +311,8 @@ if [ "${DOIMAGE}" == "y" -o "${DOIMAGE}" == "Y" ]; then
     echo "*** image '${NEWIMAGENAME}' has been deleted ***"
 
     echo "*** deleting the volume '${IMAGEVOLNAME}' ***"
-    cinder delete "${IMAGEVOLNAME}"
-    echo "Waiting for the volume '${IMAGEVOLNAME}' to be deleted ..."
-    STATUS="unknown"
-    while [ "${STATUS}" != "0" ]; do
-        sleep 5
-        STATUS=$( cinder list | grep "${IMAGEVOLNAME}" | wc -l )
-    done
-    echo "*** volume '${IMAGEVOLNAME}' has been deleted ***"
+    cinder_delete-volume "${IMAGEVOLNAME}"
+    
 fi
 
 if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
@@ -183,22 +328,11 @@ if [ "${DOSNAPCLONE}" == "y" -o "${DOSNAPCLONE}" == "Y" ]; then
 
     # now delete the clone
     echo "***deleting the clone"
-    cinder delete "${CLONE}"
-    echo "Waiting for clone to be deleted"
-    STATUS="unknown"
-    while [ "${STATUS}" != "0" ]; do
-        sleep 5
-        STATUS=$( cinder list | grep "${CLONE}" | wc -l )
-    done
+    cinder_delete-volume "${CLONE}"
+
 fi
 
 # now delete the volume
-echo "*** deleting the volume"
-cinder delete $VOLUMEID
-echo "Waiting for volume to be deleted"
-STATUS="unknown"
-while [ "${STATUS}" != "0" ]; do
-   sleep 5
-   STATUS=$( cinder list | grep "${VOLUMEID}" | wc -l )
-done
+cinder_delete-volume "${VOLUME}"
+
 

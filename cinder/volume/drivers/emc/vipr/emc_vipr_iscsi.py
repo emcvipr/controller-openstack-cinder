@@ -60,6 +60,7 @@ CONF.register_opts(volume_opts)
 class EMCViPRISCSIDriver(driver.ISCSIDriver):
     """EMC ViPR iSCSI Driver"""
     
+   
     def __init__(self, *args, **kwargs):
         super(EMCViPRISCSIDriver, self).__init__(*args, **kwargs)
         self.configuration.append_config_values(volume_opts)
