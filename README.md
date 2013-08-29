@@ -51,16 +51,16 @@ Configure EMC ViPR
 The EMC ViPR environment must meet specific configuration requirements to support the OpenStack Cinder Driver:
 * ViPR users must be assigned a Tenant Administrator role or a Project Administrator role for the Project being used. ViPR roles are configured by ViPR Security Administrators. Consult the EMC ViPR documentation for details.
 * The following configuration must have been done by a ViPR System Administrator, using the ViPR UI, ViPR API, or ViPR CLI:
-** ViPR virtual assets, such as virtual arrays and virtual pools, must have been created.
+   - ViPR virtual assets, such as virtual arrays and virtual pools, must have been created.
 Note
 Multi-volume consistency groups are not supported by the ViPR ViPR Cinder Driver. Please ensure that the Multi-volume consistency option is not enabled on the Virtual Pool with ViPR.
 * Each instance of the ViPR Cinder Driver can be used to manage only one one virtual array and one virtual pool within ViPR. 
 * The ViPR Cinder Driver requires one Virtual Storage Pool, with the following requirements (non-specified values can be set as desired):
-** Storage Type: Block
-** Provisioning Type: Thin
-** Protocol: iSCSI
-** Multi-Volume Consistency: DISABLED
-** Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots
+   - Storage Type: Block
+   - Provisioning Type: Thin
+   - Protocol: iSCSI
+   - Multi-Volume Consistency: DISABLED
+   - Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots
 
 
 Download and configure EMC ViPR Cinder driver
