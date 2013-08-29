@@ -10,377 +10,517 @@
 # it is provided by or on behalf of EMC.
 
 import common
-from common import SOSError
 import json
-import platform
-import socket
+from common import SOSError
+from tenant import Tenant
+from project import Project
+from vcenterdatacenter import VcenterDatacenter
+from common import TableGenerator
 
 
 class Cluster(object):
     '''
     The class definition for operations on 'Cluster'. 
     '''
+    URI_SERVICES_BASE       = ''
+    URI_TENANT              = URI_SERVICES_BASE + '/tenant'
+    URI_TENANTS             = URI_SERVICES_BASE + '/tenants/{0}'
+    URI_TENANTS_CLUSTERS    = URI_TENANTS      + '/clusters'
+    
+    URI_CLUSTERS            = URI_SERVICES_BASE   + '/compute/clusters'
+    URI_CLUSTER             = URI_SERVICES_BASE   + '/compute/clusters/{0}'
+    URI_CLUSTERS_BULKGET    = URI_CLUSTERS        + '/bulk'
+    
+    URI_CLUSTER_SEARCH     = URI_SERVICES_BASE + '/compute/clusters/search'
+    URI_CLUSTER_SEARCH_PROJECT      = URI_CLUSTER_SEARCH  + '?project={0}'
+    URI_CLUSTER_SEARCH_NAME         = URI_CLUSTER_SEARCH  + '?name={0}'
 
-    #Commonly used URIs for the 'Cluster' module
-    URI_TENANT_CLUSTERS = '/tenants/{0}/clusters'
-    URI_CLUSTER = '/compute/clusters/{0}'
-    URI_CLUSTER_DEACTIVATE = URI_CLUSTER + '/deactivate'
-    
-    
+    URI_RESOURCE_DEACTIVATE = '{0}/deactivate' 
+
     def __init__(self, ipAddr, port):
         '''
-        Constructor: takes IP address and port of the ViPR instance. These are
+        Constructor: takes IP address and port of the SOS instance. These are
         needed to make http requests for REST API   
         '''
         self.__ipAddr = ipAddr
         self.__port = port
         
-    
-    def cluster_create(self, name, project_name=None, tenant_name=None):
         '''
-        Makes REST API call to create a cluster under a tenant
+        create cluster action
         Parameters:
-            name: name of cluster
-            project_name: name of the project with which the cluster is associated
-            tenant_name: name of the tenant under which the cluster 
-                         is to be created
+            name      : Name of the cluster
+            tenant    : name of tenant
+            project   : Name of the project
+            datacenter: Name of datacenter
+            vcenter   : name of vcenter
         Returns:
-            Created cluster details in JSON response payload
+            result of the action.
         '''
-
-        from tenant import Tenant
+  
+    def cluster_create(self, label, tenant, project, datacenter, vcenter):
         tenant_obj = Tenant(self.__ipAddr, self.__port)
-        try:
-            tenant_uri = tenant_obj.tenant_query(tenant_name)
-        except SOSError as e:
-            raise e
+        vdatacenterobj = VcenterDatacenter(self.__ipAddr, self.__port)
+        projectobj = Project(self.__ipAddr, self.__port)
 
-        cluster_already_exists = True
-
-        try:
-            if(not tenant_name):
-                tenant_name = ""
-            self.cluster_query(tenant_name + "/" + name)
-        except SOSError as e:
-            if (e.err_code == SOSError.NOT_FOUND_ERR):
-                cluster_already_exists = False
+        if(tenant == None):
+            tenant_uri = tenant_obj.tenant_getid()
+        else:
+            tenant_uri = tenant_obj.tenant_query(tenant)
+                
+        parms = { 'name'            : label
+                   }
+        #project
+        if(project):
+            if(tenant):
+                projectname = tenant + "/" + project
             else:
-                raise e
+                projectname = "" + "/" + project
+            #on failure, query raise exception
+            parms['project'] = projectobj.project_query(projectname)
+            
+        #datacenter
+        if(datacenter):
+            #on failure, query raise exception
+            parms['vcenter_data_center'] = vdatacenterobj.vcenterdatacenter_query(datacenter, vcenter)
 
-        if (cluster_already_exists):
-            raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                           "Cluster with name: " + name + 
-                           " already exists")
+        body = json.dumps(parms)
 
-        createParams = dict()
-        createParams['name'] = name
-        if (project_name):
-            from project import Project
-            project_obj = Project(self.__ipAddr, self.__port)
-            try:
-                project_uri = project_obj.project_query(project_name)
-            except SOSError as e:
-                raise e
-            createParams['project'] = project_uri
-        body = json.dumps(createParams)
-        
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
-                                             Cluster.URI_TENANT_CLUSTERS.format(tenant_uri), body)
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                             "POST",
+                                             Cluster.URI_TENANTS_CLUSTERS.format(tenant_uri),
+                                             body)
         o = common.json_decode(s)
-        return o
+
+    '''
+        list cluster action 
+        Parameters:
+            tenant : name of tenant
+        Returns:
+            return cluster id list
+        '''    
+    def cluster_list(self, tenant):
+        uri = Tenant(self.__ipAddr, self.__port).tenant_query(tenant)
+        
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+                                             Cluster.URI_TENANTS_CLUSTERS.format(uri), None)
+        o = common.json_decode(s)
+        return o['cluster']
     
-
-    def cluster_list(self, tenant_name):
         '''
-        Makes REST API call and retrieves clusters based on tenant UUID
-        Parameters: None
-        Returns:
-            List of cluster UUIDs in JSON response payload 
-        '''
-        from tenant import Tenant
-        tenant_obj = Tenant(self.__ipAddr, self.__port)
-        try:
-            tenant_uri = tenant_obj.tenant_query(tenant_name)
-        except SOSError as e:
-            raise e
-
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
-                                             Cluster.URI_TENANT_CLUSTERS.format(tenant_uri), None)
-        o = common.json_decode(s)
-        
-        if('cluster' in o):        
-            return common.get_list(o, 'cluster')
-        return []
-        
-
-    def cluster_show_by_uri(self, uri, xml=False):
-        '''
-        Makes REST API call and retrieves cluster derails based on UUID
+        show cluster action 
         Parameters:
-            uri: UUID of the cluster
+            label : Name of the cluster
+            tenant : name of tenant
+            xml    : content-type
         Returns:
-            Cluster details in JSON response payload
+            cluster detail information
         '''
-        if (xml):
-            (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "GET", Cluster.URI_CLUSTER.format(uri), None, None, xml)
+    def cluster_show(self, label, project, tenant =None, xml=False):
+
+        uri = self.cluster_query(label, project, tenant)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+                                             Cluster.URI_CLUSTER.format(uri),
+                                             None, None, xml)
+
+        if(xml==False):
+            o = common.json_decode(s)
+            if('inactive' in o):
+                if(o['inactive'] == True):
+                    return None
+        else:
             return s
-        
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "GET", Cluster.URI_CLUSTER.format(uri), None)
-        o = common.json_decode(s)
-        inactive = common.get_node_value(o, 'inactive')
-        if (inactive == True):
-            return None
-        
         return o
-        
-
-    def cluster_show(self, name, xml=False):
-        '''
-        Retrieves cluster details based on cluster name
+    '''
+        Makes a REST API call to retrieve details of a cluster  based on its UUID
         Parameters:
-            name: name of the cluster
+            uri : uri of the cluster
         Returns:
-            Cluster details in JSON response payload
+            cluster detail information
         '''
-        cluster_uri = self.cluster_query(name)
-        cluster_detail = self.cluster_show_by_uri(cluster_uri, xml)
-        return cluster_detail
-
-
-    def cluster_query(self, name):
-        '''
-        Retrieves UUID of cluster based on its name
+    def cluster_show_uri(self, uri):
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+                                             Cluster.URI_CLUSTER.format(uri),
+                                             None, None, False)
+        return common.json_decode(s)
+    
+    '''
+        search cluster action 
         Parameters:
-            name: name of cluster
-        Returns: UUID of cluster
-        Throws:
-            SOSError - when cluster name is not found 
+            name : Name of the cluster
+            project: name of project
+        Returns:
+            return clusters list 
         '''
-        if (common.is_uri(name)):
-            return name
-        (tenant_name, cluster_name) = common.get_parent_child_from_xpath(name)
-        
-        from tenant import Tenant
-        tenant_obj = Tenant(self.__ipAddr, self.__port)
-        
-        try:
-            tenant_uri = tenant_obj.tenant_query(tenant_name)
-            clusters = self.cluster_list(tenant_uri)
-            if(clusters and len(clusters) > 0):
-                for cluster in clusters:
-                    if (cluster):
-                        cluster_detail = self.cluster_show_by_uri(cluster['id'])
-                        if(cluster_detail and cluster_detail['name'] == cluster_name):
-                            return cluster_detail['id']
-            raise SOSError(SOSError.NOT_FOUND_ERR, 'Cluster: ' + cluster_name + ' not found')
-        except SOSError as e:
-            raise e
+    def cluster_search(self, name, project):
         
 
-    def cluster_delete_by_uri(self, uri):
+        if(project):
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+                                             Cluster.URI_CLUSTER_SEARCH_PROJECT.format(project), None)
+        else:
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+                                             Cluster.URI_CLUSTER_SEARCH_NAME.format(name), None)
+        o = common.json_decode(s)
+        return o['resource']
+    
         '''
-        Deletes a cluster based on cluster UUID
+        query cluster action 
         Parameters:
-            uri: UUID of cluster
+            name : Name of the cluster
+            tenant : name of tenant
+            project: name of project
+        Returns:
+            return cluster id or uri
         '''
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "POST", Cluster.URI_CLUSTER_DEACTIVATE.format(uri), None)
+    #default = None(provider tenant)
+    def cluster_query(self, name, project, tenant = None):
+        #search by project
+        if(project):
+            if(tenant):
+                projectname = tenant + "/" + project
+            else:
+                projectname = "" + "/" + project
+            project_uri = Project(self.__ipAddr, self.__port).project_query(projectname)
+            resources = self.cluster_search(None, project_uri)
+            for resource in resources:
+                cluster = self.cluster_show_uri(resource['id'])
+                if (cluster['name'] == name):
+                    return cluster['id']
+        else:#search by resource name
+            resources = self.cluster_search(name, None)
+            for resource in resources:
+                if (resource['match'] == name):
+                    return resource['id']
+        raise SOSError(SOSError.NOT_FOUND_ERR,
+                       "cluster " + name + ": not found")
+
+        
+        '''
+        delete cluster action 
+        Parameters:
+            name : Name of the cluster
+            tenant : name of tenant
+        Returns:
+            result of the action.
+        '''
+    def cluster_delete(self, name, project, tenant=None):
+
+        uri = self.cluster_query(name, project, tenant)
+
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+                         self.URI_RESOURCE_DEACTIVATE.format(Cluster.URI_CLUSTER.format(uri)),
+                                             None)
+        
+    def cluster_update(self, name, tenant, project, datacenter, vcenter, label):
+        '''
+        update cluster with project, datacenter, label
+        Parameters:
+            name      : Name of the cluster
+            tenant    : name of tenant
+            project   : Name of the project
+            datacenter: Name of datacenter
+            vcenter   : name of vcenter
+            label     : new name to existing cluster
+        Returns:
+            result of the action.
+        '''
+        parms = {}
+        #new name 
+        if(label):
+            parms['name'] = label
+  
+        #project
+        if(project):
+            if(tenant):
+                projectname = tenant + "/" + project
+            else:
+                projectname = "" + "/" + project
+            parms['project'] = Project(self.__ipAddr, self.__port).project_query(projectname)
+            
+        #datacenter
+        if(datacenter):
+            vdatacenterobj = VcenterDatacenter(self.__ipAddr, self.__port)
+            data_uri = vdatacenterobj.vcenterdatacenter_query(datacenter, vcenter)
+            parms['vcenter_data_center'] = data_uri
+        
+        #get the cluster uri
+        cluster_uri = self.cluster_query(name, project, tenant)
+        
+        body = json.dumps(parms)
+        common.service_json_request(self.__ipAddr, self.__port, "PUT", 
+                                             Cluster.URI_CLUSTER.format(cluster_uri),
+                                             body)
         return
-
-
-    def cluster_delete(self, name):
-        '''
-        Deletes a cluster based on cluster name
+    
+    '''
+        get the uri of a datacenter
         Parameters:
-            name: name of cluster
+            datacenter : Name of the datacenter
+            vcenter : name of vcenter
+
+        Returns:
+            uri of datacenter
         '''
-        cluster_uri = self.cluster_query(name)
-        return self.cluster_delete_by_uri(cluster_uri)
+    def get_datacenter_uri(self, datacenter, vcenter):
+        vdatacenterobj = VcenterDatacenter(self.__ipAddr, self.__port)
+        return vdatacenterobj.vcenterdatacenter_query(datacenter, vcenter)
 
 
+    def cluster_get_details_list(self, detailslst):
+	rsltlst= []
+	for iter in detailslst:
+	    rsltlst.append(self.cluster_show_uri(iter['id']))
+
+        return rsltlst
+
+         
+        
+# create command parser   
 def create_parser(subcommand_parsers, common_parser):
-    # create command parser
+    
     create_parser = subcommand_parsers.add_parser('create',
                                 description='ViPR Cluster Create CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Create a cluster')
-    mandatory_args = create_parser.add_argument_group('mandatory arguments')
-    mandatory_args.add_argument('-n', '-name',
-                                metavar='<name>',
-                                dest='name',
-                                help='Name of Cluster',
-                                required=True)
-    create_parser.add_argument('-pr', '-project',
-                                metavar='<project>',
-                                dest='projectname',
-                                help='Name of Project')
-    create_parser.add_argument('-tn', '-tenant',
-                                metavar='<tenant>',
-                                dest='tenantname',
-                                help='Name of Tenant (default: Provider Tenant)')
-    create_parser.set_defaults(func=cluster_create)
-
-
+                                help='Create a Cluster')
+    
+    mandatory_args = create_parser.add_argument_group('mandatory arguments') 
+    mandatory_args.add_argument('-name',  '-n', 
+                               metavar='<name>', 
+                               dest='name', 
+                               help = 'name for the cluster',
+                               required=True)
+    create_parser.add_argument('-tenant', '-tn', 
+                               metavar='<tenantname>', 
+                               dest='tenant', 
+                               help = 'name of tenant', 
+                               default = None)
+    create_parser.add_argument('-project', '-pr', 
+                               metavar='<projectname>', 
+                               dest='project', 
+                               help = 'name of a datacenter')
+    create_parser.add_argument('-datacenter', '-dc', 
+                               metavar='<datacentername>', 
+                               dest='datacenter',    
+                               help='name of a datacenter')
+    create_parser.add_argument('-vcenter','-vc',
+                                 help='name of a vcenter',
+                                 dest='vcenter',
+                                 metavar='<vcentername>')
+    
+    create_parser.set_defaults(func=cluster_create)  
 def cluster_create(args):
     obj = Cluster(args.ip, args.port)
     try:
-        obj.cluster_create(args.name, args.projectname, args.tenantname)
+        if(args.datacenter or args.vcenter):
+            if(args.datacenter == None or args.vcenter == None):
+                print "Both vCenter and Data Center details are required"
+                return
+        obj.cluster_create(args.name, args.tenant, args.project, args.datacenter, args.vcenter)
     except SOSError as e:
-        if (e.err_code in [SOSError.NOT_FOUND_ERR, SOSError.ENTRY_ALREADY_EXISTS_ERR]):
-            raise SOSError(e.err_code,
-                           "Cluster create failed: " + e.err_text)
-        else:
-            raise e
-
-
+        common.format_err_msg_and_raise("create", "cluster", e.err_text, e.err_code)  
+         
+# delete command parser    
 def delete_parser(subcommand_parsers, common_parser):
-    # delete command parser
+
     delete_parser = subcommand_parsers.add_parser('delete',
                                 description='ViPR Cluster Delete CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Delete a cluster')
+                                help='Delete a Cluster')
     mandatory_args = delete_parser.add_argument_group('mandatory arguments')
-    mandatory_args.add_argument('-n', '-name',
-                                metavar='<name>',
-                                dest='name',
-                                help='Name of Cluster',
-                                required=True)
-    delete_parser.add_argument('-tn', '-tenant',
-                                metavar='<tenant>',
-                                dest='tenant',
-                                help='Name of tenant')
+    mandatory_args.add_argument('-name',  '-n', 
+                               metavar='<name>', 
+                               dest='name', 
+                               help = 'name of a the cluster', 
+                               required=True)
+    delete_parser.add_argument('-tenant', '-tn', 
+                               metavar='<tenantname>', 
+                               dest='tenant', 
+                               help = 'name of tenant', 
+                               default = None)
+    delete_parser.add_argument('-project', '-pr',
+                                help='Name of project',
+                                metavar='<projectname>',
+                                dest='project')
     delete_parser.set_defaults(func=cluster_delete)
-
-
 def cluster_delete(args):
     obj = Cluster(args.ip, args.port)
     try:
-        if(not args.tenant):
-            args.tenant=""
-        obj.cluster_delete(args.tenant + "/" + args.name)
-
+        obj.cluster_delete(args.name, args.project, args.tenant)
     except SOSError as e:
-        if (e.err_code == SOSError.NOT_FOUND_ERR):
-            raise SOSError(SOSError.NOT_FOUND_ERR,
-                           "Cluster delete failed: " + e.err_text)
-        else:
-            raise e
-
-
-# show command parser
+        common.format_err_msg_and_raise("delete", "cluster", e.err_text, e.err_code)
+        
+# show command parser        
 def show_parser(subcommand_parsers, common_parser):
+
     show_parser = subcommand_parsers.add_parser('show',
                                 description='ViPR Cluster Show CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Show cluster details')
-    show_parser.add_argument('-xml',
+                                help='Show a Cluster')
+    mandatory_args = show_parser.add_argument_group('mandatory arguments')
+    
+    mandatory_args.add_argument('-name',  '-n', 
+                               metavar='<name>', 
+                               dest='name', 
+                               help = 'name of a the cluster',
+                               required=True)
+    show_parser.add_argument('-tenant', '-tn', 
+                               metavar='<tenantname>', 
+                               dest='tenant', 
+                               help = 'name of tenant', 
+                               default = None)
+    show_parser.add_argument('-project', '-pr',
+                                help='Name of project',
+                                metavar='<projectname>',
+                                dest='project')
+    show_parser.add_argument('-xml',  
                                dest='xml',
                                action='store_true',
                                help='XML response')
-    mandatory_args = show_parser.add_argument_group('mandatory arguments')
-    mandatory_args.add_argument('-n', '-name',
-                                metavar='<name>',
-                                dest='name',
-                                help='Name of cluster',
-                                required=True)
-    show_parser.add_argument('-tn', '-tenant',
-                                metavar='tenant',
-                                dest='tenant',
-                                help='Name of tenant')
     show_parser.set_defaults(func=cluster_show)
-
-
+    
 def cluster_show(args):
     obj = Cluster(args.ip, args.port)
     try:
-        if(not args.tenant):
-            args.tenant=""
-        res = obj.cluster_show(args.tenant + "/" + args.name, args.xml)
-        if(res):
-            if (args.xml == True):
-                return common.format_xml(res)
-            return common.format_json_object(res)
-    except SOSError as e:
-        raise e
+        res = obj.cluster_show(args.name, args.project, args.tenant,  args.xml)
         
-
+        if(args.xml):
+            return common.format_xml(res)
+        
+        return common.format_json_object(res)
+    except SOSError as e:
+        common.format_err_msg_and_raise("show", "cluster", e.err_text, e.err_code)
+        
 # list command parser
 def list_parser(subcommand_parsers, common_parser):
-    list_parser = subcommand_parsers.add_parser('list',
-                                description='ViPR Cluster List CLI usage.',
-                                parents=[common_parser],
-                                conflict_handler='resolve',
-                                help='Lists clusters under a tenant')
-    list_parser.add_argument('-v', '-verbose',
-                             dest='verbose',
-                             help='List clusters with details',
-                             action='store_true')
-    list_parser.add_argument('-l', '-long',
-                             dest='largetable',
-                             help='List clusters in table format',
-                             action='store_true')
-    #mandatory_args = list_parser.add_argument_group('mandatory arguments')
-    list_parser.add_argument('-tn', '-tenant',
-                                metavar='<tenant>',
-                                dest='tenantname',
-                                help='Name of tenant')
-    list_parser.set_defaults(func=cluster_list)
 
+    list_parser = subcommand_parsers.add_parser('list',
+                                                description='StorageOS Cluster List CLI usage.',
+                                                parents=[common_parser],
+                                                conflict_handler='resolve',
+                                                help='List of vcenters')
+    list_parser.add_argument('-verbose', '-v',
+                             action='store_true',
+                             help='List vcenters with details',
+                             dest='verbose')
+
+    list_parser.add_argument('-long', '-l',
+                             action='store_true',
+                             help='List cluster with more details in tabular form',
+                             dest='long')
+
+    list_parser.add_argument('-tenant', '-tn',
+                                help='Name of Tenant',
+                                metavar='<tenant>',
+                                dest='tenant',
+                                default=None)
+
+    list_parser.set_defaults(func=cluster_list)
 
 def cluster_list(args):
     obj = Cluster(args.ip, args.port)
     try:
-        from common import TableGenerator
-        clusters = obj.cluster_list(args.tenantname)
-        records = []
-        for cluster in clusters:
-            proj_detail = obj.cluster_show_by_uri(cluster['id'])
-            if(proj_detail):
-                if("tenant" in proj_detail and "name" in proj_detail["tenant"]):
-                    del proj_detail["tenant"]["name"]
-                records.append(proj_detail)
-                
-        if(len(records) > 0):
+        clusters = obj.cluster_list(args.tenant)
+        output = []
+        vdatacenterobj = VcenterDatacenter(args.ip, args.port)
+        for cluster_uri in clusters:
+            clobj = obj.cluster_show_uri(cluster_uri['id'])
+            if(clobj):
+                # add vdatacenter name to cluster object
+                if('vcenter_data_center' in clobj and args.long):
+                    vobj = vdatacenterobj.vcenterdatacenter_show_by_uri(clobj['vcenter_data_center']['id'])
+                    clobj['vcenter_data_center'] = vobj['name']
+                output.append(clobj)
+
+        if(len(output) > 0):
             if(args.verbose == True):
-                return common.format_json_object(records)
+                return common.format_json_object(output)
+            elif(args.long == True):
                 
-            elif(args.largetable == True):
-                TableGenerator(records, ['name', 'owner']).printTable()
+                TableGenerator(output, [ 'name', 'vcenter_data_center'] ).printTable()
             else:
-                TableGenerator(records, ['name']).printTable()
-                    
-        else:
-            return
-            
+                TableGenerator(output, [ 'name']).printTable()
+        
+        
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("list", "cluster", e.err_text, e.err_code)
+        
+# update command parser
+def update_parser(subcommand_parsers, common_parser):
+
+    update_parser = subcommand_parsers.add_parser('update',
+                                description='ViPR Cluster Update CLI usage.',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Update a Cluster')
+    mandatory_args = update_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-name',  '-n', 
+                               metavar='<name>', 
+                               dest='name', 
+                               help = 'name of a the cluster', 
+                               required= True)
     
-
-# Cluster Main parser routine
-def cluster_parser(parent_subparser, common_parser):
+    update_parser.add_argument('-tenant', '-tn', 
+                               metavar='<tenantname>', 
+                               dest='tenant', 
+                               help = 'new name of tenant', 
+                               default = None)
+    update_parser.add_argument('-project', '-pr', 
+                               metavar='<projectname>', 
+                               dest='project', 
+                               help = 'new name of project')
+    update_parser.add_argument('-datacenter', '-dc', 
+                               metavar='<datacentername>', 
+                               dest='datacenter',    
+                               help='new name of datacenter')
+    update_parser.add_argument('-label',  '-l', 
+                               metavar='<label>', 
+                               dest='label', 
+                               help = 'new label for the cluster')
+    update_parser.add_argument('-vcenter','-vc',
+                                 help='new name of a vcenter',
+                                 dest='vcenter',
+                                 metavar='<vcentername>')
+    
+    update_parser.set_defaults(func=cluster_update)
+def cluster_update(args):
+    obj = Cluster(args.ip, args.port)
+    try:
+        if(args.datacenter or args.vcenter):
+            if(args.datacenter == None or args.vcenter == None):
+                print "Both vCenter and Data Center details are required"
+                return
+                
+        obj.cluster_update(args.name, args.tenant, args.project, args.datacenter, args.vcenter, args.label)
+    except SOSError as e:
+        common.format_err_msg_and_raise("update", "cluster", e.err_text, e.err_code)
+        
+  
+    
+def cluster_parser(parent_subparser, common_parser): 
     # main cluster parser
-
     parser = parent_subparser.add_parser('cluster',
                                 description='ViPR Cluster CLI usage',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Operations on Cluster')
-    subcommand_parsers = parser.add_subparsers(help='use one of sub-commands')
-
+    subcommand_parsers = parser.add_subparsers(help='Use one of sub commands(create, list, show, delete, update)') 
+    
     # create command parser
     create_parser(subcommand_parsers, common_parser)
-
-    # delete command parser
-    delete_parser(subcommand_parsers, common_parser)
-
-    # show command parser
-    show_parser(subcommand_parsers, common_parser)
-
+    
     # list command parser
     list_parser(subcommand_parsers, common_parser)
+    
+    # show command parser
+    show_parser(subcommand_parsers, common_parser)
+    
+    # delete command parser
+    delete_parser(subcommand_parsers, common_parser)
+    
+    # update command parser
+    update_parser(subcommand_parsers, common_parser)
 

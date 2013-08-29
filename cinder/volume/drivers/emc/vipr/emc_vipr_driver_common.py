@@ -11,7 +11,7 @@
 
 
 import os
-import socket
+import platform
 import random
 import string
 from oslo.config import cfg
@@ -33,6 +33,7 @@ from cli.project import Project
 from cli.snapshot import Snapshot
 from cli.volume import Volume
 from cli.host import Host
+from cli.hostinitiators import HostInitiator
 
 # for the delegator
 import sys,os,traceback
@@ -94,6 +95,7 @@ class EMCViPRDriverCommon():
         self.volume_obj = Volume(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.exportgroup_obj = ExportGroup(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
+        self.hostinitiator_obj = HostInitiator(self.configuration.vipr_hostname, self.configuration.vipr_port)
 
     def authenticate_user(self):       
         global AUTHENTICATED
@@ -298,18 +300,17 @@ class EMCViPRDriverCommon():
         try:
             self.authenticate_user()
             volumename = self._get_volume_name(volume)           
-            (foundgroupname, hasVolumes) = self._find_exportgroup(initiatorPort)
+            foundgroupname = self._find_exportgroup(initiatorPort)
             if (foundgroupname is None):
                 # check if this initiator is contained in any ViPR Host object
                 foundhostname= self._find_host(initiatorPort)
                 if (foundhostname is None):
                     if (not self._host_exists(hostname)):
                         # create a host so it can be added to the export group
-                        host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
-                        host_obj.host_create(hostname, self.configuration.vipr_project, self.configuration.vipr_tenant, socket.getfqdn())
+                        self.host_obj.create(hostname, platform.system(), hostname, self.configuration.vipr_tenant, self.configuration.vipr_project, None, None, None, None, None, None, None, None)
                         LOG.info("Created host " + hostname)
                     # add the initiator to the host
-                    host_obj.host_add_initiator(hostname, initiatorPort, protocol, initiatorNode);
+                    self.hostinitiator_obj.create(hostname, protocol, initiatorNode, initiatorPort);
                     foundhostname = hostname
                     LOG.info("Initiator " + initiatorPort + " added to host " + hostname)
                 else:
@@ -322,14 +323,8 @@ class EMCViPRDriverCommon():
                 # create a unique name
                 foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
                 res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname);
-                
-            # Workaround for the hlu reporting issue in ViPR for the first volume in the storage group
-            hlu = None
-            if (hasVolumes is False):
-                LOG.info("Export group " + foundgroupname + " has no volumes being exported; requesting the hlu to be 0.")
-                hlu = '0';
 
-            res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, hlu, None)
+            res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, None, None)
             return self._find_device_info(volume, initiatorPort)
 
         except SOSError as e:
@@ -345,7 +340,7 @@ class EMCViPRDriverCommon():
             voldetails = self.volume_obj.show(tenantproject + '/' + volumename)
             volid = voldetails['id']
 
-            (foundgroupname, hasVolumes) = self._find_exportgroup(initiatorPort)
+            foundgroupname = self._find_exportgroup(initiatorPort)
             if foundgroupname is not None:
                 res = self.exportgroup_obj.exportgroup_remove_volumes(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, volumename, False)    # no snapshot (snapshot = False)
                 
@@ -437,11 +432,9 @@ class EMCViPRDriverCommon():
     def _find_exportgroup(self, initiator_port):
         '''
         Find the export group to which the given initiator port belong, if exists.
-        If found, also return if it has volumes attached
         Question: can an initiator be part of two groups?
         '''
         foundgroupname = None
-        hasVolumes = False
         grouplist = self.exportgroup_obj.exportgroup_list(self.configuration.vipr_project, self.configuration.vipr_tenant)
         for groupid in grouplist:
             groupdetails = self.exportgroup_obj.exportgroup_show(groupid, self.configuration.vipr_project, self.configuration.vipr_tenant)
@@ -452,25 +445,18 @@ class EMCViPRDriverCommon():
                     break
 
             if foundgroupname is not None:
-                ''' Check if this export group really has any volumes exported '''
-                volumes = groupdetails['volumes']
-                for volume in volumes:
-                    itls = self.volume_obj.get_exports_by_uri(volume['id'])
-                    if (len(itls['itl']) > 0):
-                        hasVolumes = True
-                        LOG.info("Export group " + foundgroupname + " has volume: " + volume['id'])
-                        break
                 break
 
-        return (foundgroupname, hasVolumes)
+        return foundgroupname
 
     @retry_wrapper
     def _find_host(self, initiator_port):
         ''' Find the host, if exists, to which the given initiator belong. '''
         foundhostname = None
-        hosts = self.host_obj.host_list(self.configuration.vipr_tenant)
-        for host in hosts:
-            initiators = self.host_obj.host_query_initiators(host['id'])
+        hosts = self.host_obj.list_all(self.configuration.vipr_tenant, self.configuration.vipr_project)
+        hostsdetails = self.host_obj.show(hosts)
+        for host in hostsdetails:
+            initiators = self.host_obj.list_initiators(host['name'])
             for initiator in initiators:
                 if (initiator_port == initiator['name']):
                     foundhostname = host['name']
@@ -484,8 +470,9 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def _host_exists(self, host_name):
         ''' Check if a Host object with the given hostname already exists in ViPR '''
-        hosts = self.host_obj.host_list(self.configuration.vipr_tenant)
-        for host in hosts:
+        hosts = self.host_obj.list_all(self.configuration.vipr_tenant, self.configuration.vipr_project)
+        hostsdetails = self.host_obj.show(hosts)
+        for host in hostsdetails:
             if (host_name == host['name']):
                 return True
 

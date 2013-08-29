@@ -181,7 +181,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         initiatorNode = None
         initiatorPort = connector['initiator']
         protocol = 'iSCSI'
-        hostname = connector['host'] # socket.gethostname()        
+        hostname = connector['host']
         device_info = self.common.initialize_connection(volume,
             protocol, initiatorNode, initiatorPort, hostname)
 

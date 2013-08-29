@@ -167,14 +167,14 @@ class ExportGroup(object):
                 if (export_type == 'Cluster'):
                     cluster_obj = Cluster(self.__ipAddr, self.__port)
                     try:
-                        cluster_uri = cluster_obj.cluster_query(export_destination)
+                        cluster_uri = cluster_obj.cluster_query(export_destination, fullproj)
                     except SOSError as e:
                         raise e
                     params['clusters'] = [cluster_uri]
                 elif (export_type == 'Host'):
                     host_obj = Host(self.__ipAddr, self.__port)
                     try:
-                        host_uri = host_obj.host_query(export_destination)
+                        host_uri = host_obj.query_by_name(export_destination)
                     except SOSError as e:
                         raise e
                     params['hosts'] = [host_uri]

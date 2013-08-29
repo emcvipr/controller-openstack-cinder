@@ -22,6 +22,7 @@ import common
 from common import SOSError
 from network import Network
 from host import Host
+from hostinitiators import HostInitiator
 import viprinfo as _viprinfo
 
 '''
@@ -56,6 +57,7 @@ class Openstack(object):
         self.__ipAddr = ipAddr
         self.__port = port
         self._host = Host(self.__ipAddr, self.__port)
+        self._hostinitiator = HostInitiator(self.__ipAddr, self.__port)
         self._network = Network(self.__ipAddr, self.__port)
         self._execute = utils.execute
         self.set_logging(verbose)
@@ -81,7 +83,7 @@ class Openstack(object):
         varray = vipr_param['varray']
         
         # Find or create host.
-        host = self.create_host(host_param['hostname'])
+        host = self.create_host(host_param['hostname'], vipr_param['tenant'], vipr_param['project'])
         self._logger.info('Created/found host %s', host['name'])
         self._logger.debug('Details of host %s: %s', host_param['hostname'], host)     
                 
@@ -104,15 +106,15 @@ class Openstack(object):
         self._logger.info('Added initiator %s to network %s', initiator['initiator_port'], network['name'])
         self._logger.debug('Network details %s: ', network)
              
-    def create_host(self, hostname, ostype='Linux'):
+    def create_host(self, hostname, tenant, project, ostype='Linux'):
         # find host
         host = self.find_host(hostname)
         if (not host):
             if (not ostype) :
-                ostype = "linux"
+                ostype = "Linux"
             
                 # host not found, create a new one.
-            task_rep = self._host.host_create(hostname, None, None, hostname, ostype, None)
+            task_rep = self._host.create(hostname, ostype, hostname, tenant, project, None, None, None, None, None, None, None, None)
             host = common.show_by_href(self.__ipAddr, self.__port, task_rep['resource']) 
         return host                
     
@@ -152,17 +154,17 @@ class Openstack(object):
             initiator = {'wwpn' : wwpn}
             return initiator
     
-    def find_initiator(self, hosturi, wwpn):
-        initiators = self._host.host_query_initiators(hosturi)
+    def find_initiator(self, host, wwpn):
+        initiators = self._host.list_initiators(host)
         for initiator in initiators:
             if (initiator['name'] == wwpn):
                 return initiator
         return None    
     
     def create_initiator(self, host, connector):
-        initiator = self.find_initiator(host['id'], connector['wwpn'])
+        initiator = self.find_initiator(host['name'], connector['wwpn'])
         if (not initiator): 
-            initiator = self._host.host_add_initiator(host['name'], connector['wwpn'])
+            initiator = self._hostinitiator.create(host['name'], 'iSCSI', None, connector['wwpn'])
         return common.show_by_href(self.__ipAddr, self.__port, initiator)
     
     '''
@@ -352,6 +354,9 @@ def add_host(args):
     vipr_param['network'] = args.network
     vipr_param['port'] = args.port if args.port else viprinfo['port']
     vipr_param['hostname'] = args.ip if args.ip else viprinfo['FQDN'] 
+    vipr_param['tenant'] = viprinfo['tenant']
+    vipr_param['project'] = viprinfo['project']  
+
     if (args.verbose):
         obj.get_logger().debug('ViPR parameters: %s', vipr_param)
         
