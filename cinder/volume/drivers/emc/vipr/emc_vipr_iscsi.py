@@ -14,17 +14,12 @@ Driver for EMC ViPR iSCSI volumes.
 
 """
 
-import os
-import socket
-import time
 from oslo.config import cfg
-
 
 from cinder import exception
 # ERIC: we get an error importing flags
 # from cinder import flags
 from cinder.openstack.common import log as logging
-from cinder import utils
 from cinder.volume import driver
 from cinder.volume.drivers.emc.vipr.emc_vipr_driver_common import EMCViPRDriverCommon 
 
@@ -213,7 +208,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
         return targets 
 
-    def _get_iscsi_properties(self, volume, device_info):
+    def _get_iscsi_properties(self, volume, device_info, discover_iscsi=False):
         """Gets iscsi configuration
 
         We ideally get saved information in the volume entity, but fall back
@@ -237,50 +232,55 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             meaning use CHAP with the specified credentials.
         """
 
-        properties = {}
-        ip_address = device_info['ip_address']
-
-        location = self._do_iscsi_discovery(volume, ip_address)
-        if not location:
-            raise exception.InvalidVolume(_("Could not find iSCSI export "
-                                          " for volume %s") %
-                                          (volume['name']))
-
-        LOG.debug(_("ISCSI Discovery: Found %s") % (location))
-        properties['target_discovered'] = True
-
+ 
         try:
             if device_info['hostlunid'] is None:
                 exception_message = (_("Cannot find device number for volume %s")
                                  % volume['name'])
-        except KeyError as e:
+        except KeyError:
             raise exception.VolumeBackendAPIException(data=exception_message)
 
+        properties = {}
+        ip_address = device_info['ip_address']
         device_number = device_info['hostlunid']
         endpoint = device_info['endpoint']
+        tcp_port = device_info['tcp_port']
 
-        foundEndpoint = False
-        for loc in location:
-            results = loc.split(" ")
-            properties['target_portal'] = results[0].split(",")[0]
-            properties['target_iqn'] = results[1]
-            if properties['target_iqn'] == endpoint:
-                LOG.debug(_("Found iSCSI endpoint: %s") % endpoint)
-                foundEndpoint = True
-                break
+        if (discover_iscsi):
+            location = self._do_iscsi_discovery(volume, ip_address)
+            if not location:
+                raise exception.InvalidVolume(_("Could not find iSCSI export "
+                                                " for volume %s") %
+                                              (volume['name']))
 
-        if not foundEndpoint:
-            LOG.warn(_("ISCSI endpoint not found for volume %(name)s.")
-                     % {'name': volume['name']})
+            LOG.debug(_("ISCSI Discovery: Found %s") % (location))
+            properties['target_discovered'] = True
+            
+            foundEndpoint = False
+            for loc in location:
+                results = loc.split(" ")
+                target_portal = results[0].split(",")[0]
+                target_iqn = results[1]
+                if target_iqn == endpoint:
+                    LOG.debug(_("Found iSCSI endpoint: %s") % endpoint)
+                    foundEndpoint = True
+                    break
 
+            if not foundEndpoint:
+                LOG.warn(_("ISCSI endpoint not found for volume %(name)s.")
+                         % {'name': volume['name']})            
+        else:
+            properties['target_discovered'] = False
+            target_portal = ip_address + ':' + tcp_port
+            target_iqn = endpoint
+            
+        properties['target_iqn'] = target_iqn
+        properties['target_portal'] = target_portal
         properties['target_lun'] = device_number
-
         properties['volume_id'] = volume['id']
-
         auth = volume['provider_auth']
         if auth:
             (auth_method, auth_username, auth_secret) = auth.split()
-
             properties['auth_method'] = auth_method
             properties['auth_username'] = auth_username
             properties['auth_password'] = auth_secret

@@ -231,15 +231,8 @@ class EMCViPRDriverCommon():
                 output = []
                 for uri in uris:
                     output.append(self.volume_obj.show_by_uri(uri))
-
-                if(args.verbose == False):
-                    result = []
-                    for record in output:
-                        result.append(record['name'])
-                    return result
-
-                else:
-                    return vipr_utils.format_json_object(output)
+                    
+                return vipr_utils.format_json_object(output)
             else:
                 return
         except SOSError as e:
@@ -392,6 +385,8 @@ class EMCViPRDriverCommon():
                             device_info['hostlunid'] = found_device_number
                             device_info['endpoint'] = itl['target']['port']
                             device_info['ip_address'] = itl['target']['ip_address']
+                            device_info['tcp_port'] = itl['target']['tcp_port']
+
                             break
                 
                 if (device_info):
