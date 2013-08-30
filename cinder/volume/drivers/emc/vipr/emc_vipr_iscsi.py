@@ -141,7 +141,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """Deletes a snapshot."""
         self.common.delete_snapshot(snapshot)
 
-    def _iscsi_location(ip, target, iqn, lun=None):
+    def _iscsi_location(self, ip, target, iqn, lun=None):
         return "%s:%s,%s %s %s" % (ip, self.configuration.iscsi_port, target, iqn, lun)
 
     def ensure_export(self, context, volume):
