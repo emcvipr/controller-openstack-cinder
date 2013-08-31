@@ -23,15 +23,10 @@ from common import SOSError
 from network import Network
 from host import Host
 from hostinitiators import HostInitiator
-import viprinfo as _viprinfo
+from viprinfo import ViPRInfo
+from viprinfo import retry_wrapper as vipr_retry_wrapper
 
-'''
-LOG = logging.getLogger(__name__)
-ch = logging.StreamHandler(sys.stdout)
-ch.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s : %(message)s')
-LOG.addHandler(ch)
-'''
+AUTHENTICATED = False
 
 class Openstack(object):
     '''
@@ -60,6 +55,7 @@ class Openstack(object):
         self._hostinitiator = HostInitiator(self.__ipAddr, self.__port)
         self._network = Network(self.__ipAddr, self.__port)
         self._execute = utils.execute
+        self._vipr_info = ViPRInfo(self.VIPR_CONFIG_FILE)
         self.set_logging(verbose)
             
     def set_logging(self, verbose):
@@ -78,8 +74,12 @@ class Openstack(object):
         else:
             return hostname
     
+    def get_vipr_info(self):
+        return self._vipr_info
+    
+    #@retry_wrapper
     def add_host(self, host_param, connector, vipr_param):
-        
+        self._vipr_info.authenticate_user()
         varray = vipr_param['varray']
         
         # Find or create host.
@@ -105,7 +105,8 @@ class Openstack(object):
             self.add_initiator_to_network(host, initiator, network, vipr_param['varray'])
         self._logger.info('Added initiator %s to network %s', initiator['initiator_port'], network['name'])
         self._logger.debug('Network details %s: ', network)
-             
+    
+    @vipr_retry_wrapper         
     def create_host(self, hostname, tenant, project, ostype='Linux'):
         # find host
         host = self.find_host(hostname)
@@ -318,7 +319,6 @@ def add_host_parser(subcommand_parsers, common_parser):
                                  help='The ViPR virtual array name')
     add_host_parser.set_defaults(func=add_host)
 
-
 def add_host(args):
     obj = Openstack(args.ip, args.port, args.verbose)
     is_localhost = False
@@ -346,19 +346,17 @@ def add_host(args):
     host_param['hostname'] = hostname
     host_param['ostype'] = ostype
     host_param['is_localhost'] = is_localhost
-    if (args.verbose):
-        obj.get_logger().debug('Host parameters: %s', host_param)
+    obj.get_logger().info('Host parameters: %s', host_param)
+    
     vipr_param = dict()
-    viprinfo = _viprinfo._get_vipr_info(obj.VIPR_CONFIG_FILE)
+    viprinfo = obj.get_vipr_info().get_vipr_info()
     vipr_param['varray'] = args.varray if args.varray else viprinfo['varray']
     vipr_param['network'] = args.network
     vipr_param['port'] = args.port if args.port else viprinfo['port']
     vipr_param['hostname'] = args.ip if args.ip else viprinfo['FQDN'] 
     vipr_param['tenant'] = viprinfo['tenant']
     vipr_param['project'] = viprinfo['project']  
-
-    if (args.verbose):
-        obj.get_logger().debug('ViPR parameters: %s', vipr_param)
+    obj.get_logger().info('ViPR parameters: %s', vipr_param)
         
     try:
         host = obj.add_host(host_param, connector, vipr_param)
