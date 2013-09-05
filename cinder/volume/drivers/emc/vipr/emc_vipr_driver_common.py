@@ -309,7 +309,7 @@ class EMCViPRDriverCommon():
                 foundgroupname = hostname + 'SG'
                 # create a unique name
                 foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
-                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname);
+                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname, None, None,None, True);
 
             res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_tenant, self.configuration.vipr_project, volumename)
             return self._find_device_info(volume, initiatorPort)
@@ -350,7 +350,7 @@ class EMCViPRDriverCommon():
                     if (str(initiatorPort) == itl['initiator']['port']):
                         found = True
                         time.sleep(10)
-                        break
+                    break
                 
                 if found is False:
                     # job is done as the initiator is no longer in the /export

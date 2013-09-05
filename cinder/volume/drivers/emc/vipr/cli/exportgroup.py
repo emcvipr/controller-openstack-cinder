@@ -13,6 +13,8 @@
 #import python system modules
 
 import common
+from threading import Timer
+import time
 from volume import Volume
 from snapshot import Snapshot
 from common import SOSError
@@ -34,6 +36,8 @@ class ExportGroup(object):
     URI_EXPORT_GROUP_SEARCH = '/block/exports/search'
     URI_EXPORT_GROUP_DEACTIVATE = URI_EXPORT_GROUPS_SHOW +  '/deactivate'
     URI_EXPORT_GROUP_UPDATE = '/block/exports/{0}'
+    URI_TASK_LIST = URI_EXPORT_GROUPS_SHOW + '/tasks'
+    URI_TASK = URI_TASK_LIST + '/{1}'
     EXPORTGROUP_TYPE = ['Exclusive', 'Host', 'Cluster']
                          
     def __init__(self, ipAddr, port):
@@ -220,7 +224,7 @@ class ExportGroup(object):
         return
             return action result
          '''        
-    def exportgroup_add_volumes(self, exportgroupname, tenantname, projectname, volumename, snapshot = None, lunid = None, cg=None):
+    def exportgroup_add_volumes(self, exportgroupname, tenantname, projectname, volumename, snapshot = None, lunid = None, cg=None, sync=False):
         
         exportgroup_uri = self.exportgroup_query(exportgroupname, projectname, tenantname)
         
@@ -258,9 +262,12 @@ class ExportGroup(object):
         volChanges = {}
         volChanges['add'] = volumeEntries
         parms['volume_changes'] = volChanges
-        return self.send_json_request(exportgroup_uri, parms)
+        o= self.send_json_request(exportgroup_uri, parms)
+        if(sync):
+            return self.block_until_complete(exportgroup_uri, o["op_id"])
+        return o
         
-    def exportgroup_remove_volumes(self, exportgroupname, tenantname, projectname, volumename, snapshot=None, cg=None):
+    def exportgroup_remove_volumes(self, exportgroupname, tenantname, projectname, volumename, snapshot=None, cg=None, sync=False):
         
         exportgroup_uri = self.exportgroup_query(exportgroupname, projectname, tenantname)
 
@@ -288,7 +295,10 @@ class ExportGroup(object):
 
         parms['volume_changes'] = self._remove_list(vol_uri)
         
-        return self.send_json_request(exportgroup_uri, parms)
+        o = self.send_json_request(exportgroup_uri, parms)
+        if(sync):
+            return self.block_until_complete(exportgroup_uri, o["op_id"])
+        return o
     
     # initator
         '''
@@ -395,7 +405,50 @@ class ExportGroup(object):
                             "PUT", self.URI_EXPORT_GROUP_UPDATE.format(exportgroup_uri), body)
         return common.json_decode(s)
 
+
+    # Blocks the opertaion until the task is complete/error out/timeout
+    def block_until_complete(self, exportgroup_uri, task_id):
+
+        while(True):
+            out = self.show_task_by_uri(exportgroup_uri, task_id)
+
+            if(out):
+                if(out["state"] == "ready"):
+                   break
+
+                # if the status of the task is 'error' then cancel the timer and raise exception
+                if(out["state"] == "error"):
+                    
+                    raise SOSError(SOSError.VALUE_ERR, "Task: "+ task_id + " is in ERROR state")
+
+            
+        # sleep for a second
+        time.sleep(1)
+        
+        return
     
+    
+    def show_task_by_uri(self, exportgroup_uri, task_id=None):
+        
+        if(not task_id):
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                                "GET",
+                                                ExportGroup.URI_TASK_LIST.format(exportgroup_uri),
+                                                None)
+            if (not s):
+                return []
+            o = common.json_decode(s)
+            res = o["task"]
+            return res
+        else:
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port,
+                                                 "GET",
+                                                 ExportGroup.URI_TASK.format(exportgroup_uri, task_id),
+                                                 None)
+            if (not s):
+                return None
+            o = common.json_decode(s)
+            return o    
 # Export Group Create routines
 
 def create_parser(subcommand_parsers, common_parser):
@@ -641,13 +694,19 @@ def add_volume_parser(subcommand_parsers, common_parser):
                 metavar='<Logicalunitnumber>',
                 dest='lun',
                 help='Logical Unit Number')
+    
+    add_volume_parser.add_argument('-sync', '-s',
+                metavar='<Synchronized>',
+                dest='sync',
+                help='Synchronized operation',
+                default = False)
 
     add_volume_parser.set_defaults(func=exportgroup_add_volumes)
 
 def exportgroup_add_volumes(args):
     try:
         objExGroup = ExportGroup(args.ip, args.port)
-        objExGroup.exportgroup_add_volumes(args.name, args.tenant, args.project, args.volume, args.snapshot, args.lun, args.consistencygroup)            
+        objExGroup.exportgroup_add_volumes(args.name, args.tenant, args.project, args.volume, args.snapshot, args.lun, args.consistencygroup, args.sync)            
     except SOSError as e:
         raise common.format_err_msg_and_raise("add_vol", "exportgroup", e.err_text, e.err_code)
         

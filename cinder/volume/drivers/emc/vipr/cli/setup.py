@@ -21,8 +21,6 @@ distutils.core.setup(
 			'virtualpool.py',
 			'exportgroup.py',
 			'fileshare.py',
-			'metering.py',
-			'monitoring.py',
 			'virtualarray.py',
 			'project.py',
 			'snapshot.py',
@@ -32,17 +30,12 @@ distutils.core.setup(
 			'tenant.py',
 			'network.py',
 			'volume.py',
-                        'key.py',
-                        'keypool.py',
-                        'sysmanager.py', 
+                        'sysmanager.py',
                         'config.xml',
                         'customparser.py',
                         'viprcli_interpreter.py',
                         'viprcli.bat',
                         'protectionsystem.py',
-                        'networksystem.py' ,
-			'objectuser.py',
-			'objectvpool.py',
 			'secretkeyuser.py',
             'consistencygroup.py',
             'host.py',
@@ -50,8 +43,7 @@ distutils.core.setup(
             'hostipinterfaces.py',
             'cluster.py',
             'vcenter.py',
-            'vcenterdatacenter.py',
-            'sysmgrcontrolsvc.py'
+            'vcenterdatacenter.py'
 
 			 
 		    ]
