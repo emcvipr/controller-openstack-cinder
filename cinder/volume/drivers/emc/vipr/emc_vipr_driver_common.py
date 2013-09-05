@@ -120,24 +120,20 @@ class EMCViPRDriverCommon():
         self.vpool = vpool['ViPR:VPOOL']
 
         try:
-            sync = True
-            count = 1
             res = self.volume_obj.create(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project,
                              name,
                              size,
                              self.configuration.vipr_varray,
                              self.vpool,
-                             None,
-                             sync,
-                             count,
-                             None,
-                             None,
-                             None,
-                             None,
-                             None
+                             protocol=None, # no longer specified in volume creation
+                             sync=True,
+                             number_of_volumes=1,
+                             thin_provisioned=None, # no longer specified in volume creation
+                             protection=None,
+                             protection_varrays=None,
+                             consistent_volume_label=None,
+                             consistencygroup=None
                              )
-            if(sync == False):
-                return vipr_utils.format_json_object(res)
         except SOSError as e:
             if(e.err_code == SOSError.SOS_FAILURE_ERR):
                 raise SOSError(SOSError.SOS_FAILURE_ERR, "Volume " +
@@ -193,16 +189,12 @@ class EMCViPRDriverCommon():
         srcname = self._get_volume_name(src_vref)
         
         try:
-            sync = True
-            count = 1
             res = self.volume_obj.clone(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project,
                              name,
-                             count,
-                             srcname,
-                             sync                             
+                             number_of_volumes=1,
+                             srcname=srcname,
+                             sync=True
                              )
-            if(sync == False):
-                return vipr_utils.format_json_object(res)
         except SOSError as e:
             if(e.err_code == SOSError.SOS_FAILURE_ERR):
                 raise SOSError(SOSError.SOS_FAILURE_ERR, "Volume " +
@@ -215,9 +207,11 @@ class EMCViPRDriverCommon():
         self.authenticate_user()
         name = self._get_volume_name(vol)
         try:
-            self.volume_obj.delete(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name, None, True)   # synchronous call
+            self.volume_obj.delete(self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name, volume_name_list=None, sync=True)
         except SOSError as e:
-            if (e.err_code == SOSError.SOS_FAILURE_ERR):
+            if e.err_code == SOSError.NOT_FOUND_ERR:
+                LOG.info("Volume " + name + " no longer exists; volume deletion is considered success.")
+            elif e.err_code == SOSError.SOS_FAILURE_ERR:
                 raise SOSError(SOSError.SOS_FAILURE_ERR, "Volume " +
                                name + ": Delete failed\n" + e.err_text)
             else:
@@ -250,8 +244,7 @@ class EMCViPRDriverCommon():
             tenantname = self.configuration.vipr_tenant
             storageresType = 'block'
             storageresTypename = 'volumes'
-            filesystem = None
-            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, None, projectname, tenantname)
+            resourceUri = obj.storageResource_query(storageresType, fileshareName=None, volumeName=volumename, cgName=None, project=projectname, tenant=tenantname)
             inactive = False
             rptype = None
             sync = True
@@ -268,18 +261,19 @@ class EMCViPRDriverCommon():
     def delete_snapshot(self, snapshot):
         self.authenticate_user()
         obj = Snapshot(self.configuration.vipr_hostname, self.configuration.vipr_port)
+        snapshotname = snapshot['name']
         try:
-            snapshotname = snapshot['name']
             vol = snapshot['volume']
             volumename = self._get_volume_name(vol)
             projectname = self.configuration.vipr_project
             tenantname = self.configuration.vipr_tenant
             storageresType = 'block'
             storageresTypename = 'volumes'
-            filesystem = None
-            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, None, projectname, tenantname)
-            sync = True
-            obj.snapshot_delete(storageresType, storageresTypename, resourceUri, snapshotname, sync)
+            resourceUri = obj.storageResource_query(storageresType, fileshareName=None, volumeName=volumename, cgName=None, project=projectname, tenant=tenantname)
+            if resourceUri is None:
+                LOG.info("Snapshot " + snapshotname + " is not found; snapshot deletion is considered successful.")
+            else:
+                obj.snapshot_delete(storageresType, storageresTypename, resourceUri, snapshotname, sync=True)
             return
         except SOSError as e:
             if (e.err_code == SOSError.SOS_FAILURE_ERR):
@@ -300,7 +294,7 @@ class EMCViPRDriverCommon():
                 if (foundhostname is None):
                     if (not self._host_exists(hostname)):
                         # create a host so it can be added to the export group
-                        self.host_obj.create(hostname, platform.system(), hostname, self.configuration.vipr_tenant, None, None, None, None, None, None, None, None, None)
+                        self.host_obj.create(hostname, platform.system(), hostname, self.configuration.vipr_tenant, project=None, port=None, username=None, passwd=None, usessl=None, osversion=None, cluster=None, datacenter=None, vcenter=None)
                         LOG.info("Created host " + hostname)
                     # add the initiator to the host
                     self.hostinitiator_obj.create(hostname, protocol, initiatorNode, initiatorPort);
@@ -335,7 +329,9 @@ class EMCViPRDriverCommon():
 
             foundgroupname = self._find_exportgroup(initiatorPort)
             if foundgroupname is not None:
-                res = self.exportgroup_obj.exportgroup_remove_volumes(foundgroupname, self.configuration.vipr_tenant, self.configuration.vipr_project, volumename, False)    # no snapshot (snapshot = False)
+                res = self.exportgroup_obj.exportgroup_remove_volumes(foundgroupname, self.configuration.vipr_tenant, self.configuration.vipr_project, volumename, snapshot=False)
+            else:
+                LOG.info("No export group found for this initiator: " + initiatorPort + "; this is considered already detached.")
                 
             while (True):
                 try:
@@ -349,9 +345,16 @@ class EMCViPRDriverCommon():
                     time.sleep(10)
                     continue
                 
-                if len(exports['itl']) == 0:
+                found = False
+                for itl in exports['itl']:
+                    if (str(initiatorPort) == itl['initiator']['port']):
+                        found = True
+                        time.sleep(10)
+                        break
+                
+                if found is False:
+                    # job is done as the initiator is no longer in the /export
                     break
-                time.sleep(10)
                 
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Detaching volume " + volumename + " from host " + hostname + " failed: " + e.err_text)
@@ -501,7 +504,7 @@ class EMCViPRDriverCommon():
                         (s, h) = vipr_utils.service_json_request(self.configuration.vipr_hostname, self.configuration.vipr_port,
                                       "GET",
                                       URI_VPOOL_VARRAY_CAPACITY.format(vpair[0], vpair[1]),
-                                      None)
+                                      body=None)
                         capacity = vipr_utils.json_decode(s)
                         
                         free_gb += float(capacity["free_gb"])
