@@ -10,6 +10,7 @@
 import common
 import fileshare
 import volume
+import consistencygroup
 import json
 import time
 from threading import Timer
@@ -38,10 +39,17 @@ class Snapshot(object):
     
     URI_RESOURCE_DEACTIVATE      = '{0}/deactivate'
     
+    URI_CONSISTENCY_GROUP = "/block/consistency-groups"
+    URI_CONSISTENCY_GROUPS_SNAPSHOT = URI_CONSISTENCY_GROUP + "/{0}/protection/snapshots"
+    URI_CONSISTENCY_GROUPS_SNAPSHOT_INSTANCE  = URI_CONSISTENCY_GROUP + "/{0}/protection/snapshots/{1}"
+    URI_CONSISTENCY_GROUPS_SNAPSHOT_ACTIVATE = URI_CONSISTENCY_GROUPS_SNAPSHOT_INSTANCE + "/activate"
+    URI_CONSISTENCY_GROUPS_SNAPSHOT_DEACTIVATE = URI_CONSISTENCY_GROUPS_SNAPSHOT_INSTANCE + "/deactivate"
+    URI_CONSISTENCY_GROUPS_SNAPSHOT_RESTORE = URI_CONSISTENCY_GROUPS_SNAPSHOT_INSTANCE + "/restore"
     
     SHARES  = 'filesystems'
     VOLUMES = 'volumes'
     OBJECTS  = 'objects'
+    CG	     = 'consistency-groups'
     
     FILE    = 'file'
     BLOCK   = 'block'
@@ -63,7 +71,7 @@ class Snapshot(object):
         '''new snapshot is created, for a given shares or volumes
             parameters:
                 otype      : either file or block or object type should be provided
-                typename   : either filesystem or volume should be provided
+                typename   : either filesystem or volume or consistency-groups should be provided
                 ouri       : uri of filesystems or volume 
                 snaplabel  : name of the snapshot
         '''
@@ -138,8 +146,8 @@ class Snapshot(object):
         Makes REST API call to list snapshot under a shares or volumes
          parameters:
             otype     : either file or block or object type should be provided
-            otypename : either filesystem or volumes should be provided
-            ouri      : uri of filesystem or volumes 
+            otypename : either filesystem or volumes or consistency-groups should be provided
+            ouri      : uri of filesystem or volumes or consistency-group
             
         Returns:
             return list of snapshots
@@ -149,23 +157,28 @@ class Snapshot(object):
         o = common.json_decode(s)
         return o['snapshot']
                 
-    def snapshot_list(self, otype, otypename, filesharename, volumename, project, tenant):
-        resourceUri = self.storageResource_query(otype, filesharename, volumename, project, tenant)
+    def snapshot_list(self, otype, otypename, filesharename, volumename, cg, project, tenant):
+        resourceUri = self.storageResource_query(otype, filesharename, volumename, cg, project, tenant)
         if(resourceUri is not None):
             return self.snapshot_list_uri(otype, otypename, resourceUri)
         return None
     
-    def snapshot_show_uri(self, otype, suri, xml=False):
+    def snapshot_show_uri(self, otype, resourceUri, suri, xml=False):
         ''' 
         Retrieves snapshot details based on snapshot Name or Label
         Parameters:
             otype : either file or block
             suri : uri of the Snapshot.
+            resourceUri: uri of the source resource
+            typename: either filesystem or volumes or consistency-groups should be provided
         Returns:
             Snapshot details in JSON response payload 
         '''
-        
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+        if(resourceUri.find('BlockConsistencyGroup') > 0):
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
+                                             Snapshot.URI_CONSISTENCY_GROUPS_SNAPSHOT_INSTANCE.format(resourceUri, suri), None, None, xml)
+        else:
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
                                              Snapshot.URI_SNAPSHOTS.format(otype, suri), None, None, xml)
         
         if(xml==False):
@@ -174,23 +187,27 @@ class Snapshot(object):
     
     def snapshot_show(self, storageresType, storageresTypename, resourceUri, name, xml ):
         snapshotUri = self.snapshot_query(storageresType, storageresTypename, resourceUri, name)
-        return self.snapshot_show_uri(storageresType, snapshotUri, xml)
+        return self.snapshot_show_uri(storageresType, resourceUri, snapshotUri, xml)
         
     '''Delete a snapshot by uri
         parameters:
             otype : either file or block
             suri : Uri of the Snapshot.
     '''
-    def snapshot_delete_uri(self, otype, suri, sync):
+    def snapshot_delete_uri(self, otype, resourceUri, suri, sync):
         s = None
         if(otype == Snapshot.FILE):
             #print Snapshot.URI_RESOURCE_DEACTIVATE.format(Snapshot.URI_FILE_SNAPSHOTS.format(suri))
            (s, h)  = common.service_json_request(self.__ipAddr, self.__port, "POST", 
                                              Snapshot.URI_RESOURCE_DEACTIVATE.format(Snapshot.URI_FILE_SNAPSHOTS.format(suri)), None)
-        else:
+        elif(resourceUri.find("Volume") > 0):
             #print Snapshot.URI_RESOURCE_DEACTIVATE.format(Snapshot.URI_BLOCK_SNAPSHOTS.format(suri))
             (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
                                              Snapshot.URI_RESOURCE_DEACTIVATE.format(Snapshot.URI_BLOCK_SNAPSHOTS.format(suri)), None)
+        elif(resourceUri.find("BlockConsistencyGroup") > 0):
+            
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+                                             Snapshot.URI_CONSISTENCY_GROUPS_SNAPSHOT_DEACTIVATE.format(resourceUri, suri), None)
         o = common.json_decode(s)
         if(sync):
             return self.block_until_complete(otype, o["resource"]["id"], o["op_id"])
@@ -198,24 +215,28 @@ class Snapshot(object):
         return o
     def snapshot_delete(self, storageresType, storageresTypename, resourceUri, name, sync):
         snapshotUri = self.snapshot_query(storageresType, storageresTypename, resourceUri, name)
-        self.snapshot_delete_uri(storageresType, snapshotUri, sync)
+        self.snapshot_delete_uri(storageresType, resourceUri, snapshotUri, sync)
 
     def snapshot_restore(self, storageresType, storageresTypename, resourceUri, name, sync):    
         snapshotUri = self.snapshot_query(storageresType, storageresTypename, resourceUri, name)
-        return self.snapshot_restore_uri(storageresType, storageresTypename, snapshotUri, sync)
+        return self.snapshot_restore_uri(storageresType, storageresTypename, resourceUri, snapshotUri, sync)
 
-    def snapshot_restore_uri(self, otype, typename, suri, sync):
+    def snapshot_restore_uri(self, otype, typename, resourceUri, suri, sync):
         ''' Makes REST API call to restore Snapshot under a shares or volumes
             parameters:
                 otype    : either file or block or object type should be provided
                 typename : either filesystem or volumes should be provided
                 suri     : uri of a snapshot
+                resourceUri: base resource uri
 
             returns:
                 restore the snapshot
         '''
-        #print Snapshot.URI_SNAPSHOT_RESTORE.format(otype, suri)
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+        if(resourceUri.find("BlockConsistencyGroup") > 0):
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+                                             Snapshot.URI_CONSISTENCY_GROUPS_SNAPSHOT_RESTORE.format(resourceUri, suri), None)
+        else:    
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
                                              Snapshot.URI_SNAPSHOT_RESTORE.format(otype, suri), None)
         o = common.json_decode(s)
         #print o
@@ -223,10 +244,14 @@ class Snapshot(object):
             return self.block_until_complete(otype, suri, o["op_id"])
         else:
             return o
-    def snapshot_activate_uri(self, otype, typename, suri, sync):
+    def snapshot_activate_uri(self, otype, typename, resourceUri, suri, sync):
         
         #print Snapshot.URI_BLOCK_SNAPSHOTS_ACTIVATE.format(otype, suri)
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+        if(resourceUri.find("BlockConsistencyGroup") > 0):
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
+                                             Snapshot.URI_CONSISTENCY_GROUPS_SNAPSHOT_ACTIVATE.format(resourceUri, suri), None)
+        else:
+            (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
                                              Snapshot.URI_BLOCK_SNAPSHOTS_ACTIVATE.format(otype, suri), None)
         o = common.json_decode(s)
         if(sync):
@@ -237,7 +262,7 @@ class Snapshot(object):
     def snapshot_activate(self, storageresType, storageresTypename, resourceUri, name, sync):
         snapshotUri = self.snapshot_query(storageresType, storageresTypename, resourceUri, name)
         snapshotUri = snapshotUri.strip()
-        return self.snapshot_activate_uri(storageresType, storageresTypename, snapshotUri, sync)
+        return self.snapshot_activate_uri(storageresType, storageresTypename, resourceUri, snapshotUri, sync)
 
       
     def snapshot_export_file_uri(self, otype, suri, permissions, securityType, protocol, rootUserMapping, endpoints, 
@@ -418,14 +443,14 @@ class Snapshot(object):
         if(resuri is not None):
             uris = self.snapshot_list_uri(storageresType, storageresTypename, resuri)
             for uri in uris:
-                snapshot = self.snapshot_show_uri(storageresType, uri['id'])
+                snapshot = self.snapshot_show_uri(storageresType, resuri, uri['id'])
                 if(False == (common.get_node_value(snapshot, 'inactive')) ):
                     if (snapshot['name'] == snapshotName):
                         return snapshot['id']
                 
         raise SOSError(SOSError.SOS_FAILURE_ERR, "snapshot with the name:" + snapshotName + " Not Found")
   
-    def storageResource_query(self, storageresType, fileshareName, volumeName, project, tenant):
+    def storageResource_query(self, storageresType, fileshareName, volumeName, cgName, project, tenant):
         resourcepath = "/" + project + "/"
         if(tenant != None):
             resourcepath = tenant + resourcepath
@@ -435,15 +460,18 @@ class Snapshot(object):
         if(Snapshot.FILE == storageresType):
             resourceObj = fileshare.Fileshare(self.__ipAddr, self.__port)
             resUri = resourceObj.fileshare_query(resourcepath+fileshareName)
-        elif(Snapshot.BLOCK == storageresType):
+        elif(Snapshot.BLOCK == storageresType and volumeName is not None):
             resourceObj = volume.Volume(self.__ipAddr, self.__port)
             resUri = resourceObj.volume_query(resourcepath +volumeName)
+        elif(Snapshot.BLOCK == storageresType and cgName is not None):
+            resourceObj = consistencygroup.ConsistencyGroup(self.__ipAddr, self.__port)
+            resUri = resourceObj.consistencygroup_query(cgName, project, tenant)
         else:
             resourceObj = None
             
         return resUri
          
-    def get_storageAttributes(self, fileshareName, volumeName):
+    def get_storageAttributes(self, fileshareName, volumeName, cgName):
         storageresType     = None
         storageresTypeName = None
         if(fileshareName is not None):
@@ -452,6 +480,9 @@ class Snapshot(object):
         elif(volumeName is not None):
             storageresType = Snapshot.BLOCK
             storageresTypeName = Snapshot.VOLUMES
+        elif(cgName is not None):
+            storageresType = Snapshot.BLOCK
+            storageresTypeName = Snapshot.CG
         else:
             storageresType = None
             storageresTypeName = None
@@ -477,10 +508,11 @@ class Snapshot(object):
                     break
                 # if the status of the task is 'error' then cancel the timer and raise exception
                 if(out["state"] == "error"):
+                    detail = out["service_error"]
                     # cancel the timer
                     t.cancel()
                     raise SOSError(SOSError.VALUE_ERR, 
-                                   "Task: ["+ op_id +"], "+ out["message"] )
+                                   "Task: ["+ op_id +"], "+ detail["details"] )
 
             if(self.isTimeout):
                 print "Operation timed out"
@@ -538,6 +570,10 @@ def create_parser(subcommand_parsers, common_parser):
                                 metavar = '<volumename>', 
                                 dest = 'volume', 
                                 help = 'Name of a volume')
+    group.add_argument('-consistencygroup', '-cg',
+                                metavar = '<consistencygroup>',
+                                dest = 'consistencygroup',
+                                help = 'Name of a consistencygroup')
     
     create_parser.set_defaults(func=snapshot_create)
  
@@ -545,11 +581,11 @@ def snapshot_create(args):
 
     obj = Snapshot(args.ip, args.port)
     try:
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume, args.consistencygroup)
         if(storageresType == Snapshot.FILE and args.inactive == True):
             print "-inactive option is used for block type only"
             return 
-        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.project, args.tenant)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
         obj.snapshot_create(storageresType, storageresTypename, resourceUri, args.name, args.inactive, args.type, args.synchronous)
         return 
         
@@ -557,7 +593,7 @@ def snapshot_create(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Snapshot: " + args.name + ", Create Failed\n" + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("create", "snapshot", e.err_text, e.err_code)
         
 # Snapshot List routines
         
@@ -588,6 +624,10 @@ def list_parser(subcommand_parsers, common_parser):
                                 metavar = '<volumename>', 
                                 dest = 'volume', 
                                 help = 'Name of a volume')
+    arggroup.add_argument('-consistencygroup', '-cg', 
+                                metavar = '<consistencygroup>', 
+                                dest = 'consistencygroup', 
+                                help = 'Name of a consistencygroup')
     list_parser.add_argument('-verbose', '-v',
                                 dest='verbose',
                                 help='List snapshots with details',
@@ -607,12 +647,13 @@ def snapshot_list(args):
         if(args.tenant != None):
             resourcepath = args.tenant + resourcepath
         
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume)
-        uris = obj.snapshot_list(storageresType, storageresTypename, args.filesystem, args.volume, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume, args.consistencygroup)
+        uris = obj.snapshot_list(storageresType, storageresTypename, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
         
         records = []
         for uri in uris:
-            snapshot_obj = obj.snapshot_show_uri(storageresType, uri['id']);
+            snapshot_obj = obj.snapshot_show_uri(storageresType, resourceUri, uri['id']);
             if(False == (common.get_node_value(snapshot_obj, 'inactive')) ):
                 records.append(snapshot_obj)
                 
@@ -644,7 +685,7 @@ def snapshot_list(args):
             return
         
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("list", "snapshot", e.err_text, e.err_code)
 
 # Snapshot Show routines
 
@@ -687,6 +728,11 @@ def show_parser(subcommand_parsers, common_parser):
                              metavar = '<filesystemname>', 
                              dest = 'filesystem', 
                              help='Name a filesystem')
+    mutex_group.add_argument('-consistencygroup', '-cg', 
+                             metavar='<consistencygroup>',
+                             dest = 'consistencygroup',
+                             help='Name of a consistencygroup')
+
   
     show_parser.set_defaults(func=snapshot_show)
 
@@ -694,8 +740,8 @@ def snapshot_show(args):
     obj = Snapshot(args.ip, args.port)
     try:
         #get URI name
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume)
-        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume, args.consistencygroup)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
         respContent = obj.snapshot_show(storageresType, storageresTypename, resourceUri, args.name, args.xml)
         
         if(args.xml):
@@ -707,7 +753,7 @@ def snapshot_show(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "snapshot " + args.name + ": Not Found")
         else:
-            raise e
+            common.format_err_msg_and_raise("show", "snapshot", e.err_text, e.err_code)
 
 # Snapshot Delete routines
 
@@ -745,6 +791,10 @@ def delete_parser(subcommand_parsers, common_parser):
                                 metavar = '<volumename>', 
                                 dest = 'volume', 
                                 help = 'Name of a volume')
+    group.add_argument('-consistencygroup', '-cg', 
+                                metavar = '<consistencygroup>', 
+                                dest = 'consistencygroup', 
+                                help = 'Name of a consistencygroup')
     
     delete_parser.add_argument('-synchronous', '-sync',
                                 dest='sync',
@@ -756,8 +806,8 @@ def delete_parser(subcommand_parsers, common_parser):
 def snapshot_delete(args):
     obj = Snapshot(args.ip, args.port)
     try:
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume)
-        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume, args.consistencygroup)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
         obj.snapshot_delete(storageresType, storageresTypename, resourceUri, args.name, args.sync)
         return 
     except SOSError as e:
@@ -765,7 +815,7 @@ def snapshot_delete(args):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Snapshot " + args.name + 
                            ": Delete Failed\n" + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("delete", "snapshot", e.err_text, e.err_code)
 
 # Snapshot Export file routines
 
@@ -856,8 +906,8 @@ def snapshot_export_file(args):
                 print '-endpoints, -permission, -security and -rootuser are required for NFS protocol'
                 return
             
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, None)
-        resourceUri = obj.storageResource_query(storageresType, args.filesystem, None, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, None, None)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, None, None, args.project, args.tenant)
         res = obj.snapshot_export_file(storageresType, storageresTypename, resourceUri, args.name,
                                                                                         args.permission, 
                                                                                         args.security, 
@@ -874,7 +924,7 @@ def snapshot_export_file(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Snapshot: " + args.name +", Export failed\n" + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("export-file", "snapshot", e.err_text, e.err_code)
         
 # Snapshot volume file routines
         
@@ -1042,8 +1092,8 @@ def snapshot_unexport_file(args):
             if(args.permission == None or args.security == None or args.rootuser == None):
                 print '-permission, -security, -rootuser and -protocol are required for NFS protocol'
                 return
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, None)
-        resourceUri = obj.storageResource_query(storageresType, args.filesystem, None, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, None, None)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, None, None, args.project, args.tenant)
         
         res = obj.snapshot_unexport_file(storageresType, storageresTypename, resourceUri, args.name,
                                                                                     args.permission, 
@@ -1060,7 +1110,7 @@ def snapshot_unexport_file(args):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Snapshot " + args.name  
                            + ", Unexport for file is failed\n" + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("unexport-file", "snapshot", e.err_text, e.err_code)
         
 def unexport_volume_parser(subcommand_parsers, common_parser):
     unexport_parser = subcommand_parsers.add_parser('unexport-volume',
@@ -1161,11 +1211,15 @@ def activate_parser(subcommand_parsers, common_parser):
                                 dest='project',
                                 help='Name of project',
                                 required=True)
-    mandatory_args.add_argument('-volume', '-vol', 
+    group = activate_parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-consistencygroup', '-cg', 
+                                metavar='<consistencygroup>',
+                                dest = 'consistencygroup', 
+                                help = 'Name of consistencygroup')
+    group.add_argument('-volume', '-vol', 
                                 metavar = '<volumename>', 
                                 dest = 'volume', 
-                                help = 'Name of a volume',
-                                required=True)
+                                help = 'Name of a volume')
 
     '''
     group = activate_parser.add_mutually_exclusive_group(required=True)
@@ -1188,8 +1242,8 @@ def activate_parser(subcommand_parsers, common_parser):
 def snapshot_activate(args):
     obj = Snapshot(args.ip, args.port)
     try:
-        (storageresType, storageresTypename) = obj.get_storageAttributes(None, args.volume)
-        resourceUri = obj.storageResource_query(storageresType, None, args.volume, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(None, args.volume, args.consistencygroup)
+        resourceUri = obj.storageResource_query(storageresType, None, args.volume, args.consistencygroup, args.project, args.tenant)
         snapshotUri = obj.snapshot_query(storageresType, storageresTypename, resourceUri, args.name)
         snapshotUri = snapshotUri.strip()
         start = time.time()
@@ -1238,6 +1292,10 @@ def restore_parser(subcommand_parsers, common_parser):
                                 metavar = '<volumename>', 
                                 dest = 'volume', 
                                 help = 'Name of a volume')
+    group.add_argument('-consistencygroup', '-cg', 
+                                metavar = '<consistencygroup>', 
+                                dest = 'consistencygroup', 
+                                help = 'Name of a consistencygroup')
     
     restore_parser.add_argument('-synchronous', '-sync',
                                 dest='sync',
@@ -1249,15 +1307,15 @@ def restore_parser(subcommand_parsers, common_parser):
 def snapshot_restore(args):
     obj = Snapshot(args.ip, args.port)
     try:
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume)
-        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume, args.consistencygroup)
+        resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
         obj.snapshot_restore(storageresType, storageresTypename, resourceUri, args.name, args.sync)
     
     except SOSError as e:
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Snapshot " + args.name + ": Restore Failed\n" + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("restore", "snapshot", e.err_text, e.err_code)
         
 # Snapshot tasks routines
 def tasks_parser(subcommand_parsers, common_parser):
@@ -1287,6 +1345,10 @@ def tasks_parser(subcommand_parsers, common_parser):
                                 metavar = '<volumename>', 
                                 dest = 'volume', 
                                 help = 'Name of a volume')
+    arggroup.add_argument('-consistencygroup', '-cg', 
+                                metavar = '<consistencygroup>', 
+                                dest = 'consistencygroup', 
+                                help = 'Name of a consistencygroup')
     
     tasks_parser.add_argument('-name', '-n',
                                 metavar='<snapshotname>',
@@ -1319,8 +1381,8 @@ def snapshot_tasks(args):
         if(args.tenant != None):
             resourcepath = args.tenant + resourcepath
           
-        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume)
-        uris = obj.snapshot_list(storageresType, storageresTypename, args.filesystem, args.volume, args.project, args.tenant)
+        (storageresType, storageresTypename) = obj.get_storageAttributes(args.filesystem, args.volume, args.consistencygroup)
+        uris = obj.snapshot_list(storageresType, storageresTypename, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
         #for a given snapshot, get all actions
         
         all_tasks = []
@@ -1332,8 +1394,9 @@ def snapshot_tasks(args):
                     all_tasks+=taskslist
         else:# get all snapshot opids for a given snapshot name
             snapshot_ob = None
+            resourceUri = obj.storageResource_query(storageresType, args.filesystem, args.volume, args.consistencygroup, args.project, args.tenant)
             for suri in uris:
-                snapshot_ob = obj.snapshot_show_uri(storageresType, suri['id'])
+                snapshot_ob = obj.snapshot_show_uri(storageresType, resourceUri, suri['id'])
                 if(snapshot_ob['name'] == args.name):
                     break
                 else:
@@ -1359,7 +1422,7 @@ def snapshot_tasks(args):
                 TableGenerator(all_tasks, ["op_id", "name", "state"]).printTable()
                 
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("tasks", "snapshot", e.err_text, e.err_code)
 #
 # Snapshot Main parser routine
 #

@@ -251,7 +251,7 @@ class EMCViPRDriverCommon():
             storageresType = 'block'
             storageresTypename = 'volumes'
             filesystem = None
-            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, projectname, tenantname)
+            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, None, projectname, tenantname)
             inactive = False
             rptype = None
             sync = True
@@ -277,7 +277,7 @@ class EMCViPRDriverCommon():
             storageresType = 'block'
             storageresTypename = 'volumes'
             filesystem = None
-            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, projectname, tenantname)
+            resourceUri = obj.storageResource_query(storageresType, filesystem, volumename, None, projectname, tenantname)
             sync = True
             obj.snapshot_delete(storageresType, storageresTypename, resourceUri, snapshotname, sync)
             return
@@ -381,7 +381,7 @@ class EMCViPRDriverCommon():
                         # 0 is a valid number for found_device_number.
                         # Only loop if it is None or -1
                         if (found_device_number is not None and found_device_number != '-1'):
-                            LOG.debug(_("Found Device Number: %(found_device_number)s"))
+                            LOG.debug(_("Found Device Number: %(found_device_number)s") % (locals()))
                             device_info['hostlunid'] = found_device_number
                             device_info['endpoint'] = itl['target']['port']
                             device_info['ip_address'] = itl['target']['ip_address']
