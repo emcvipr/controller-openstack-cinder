@@ -41,7 +41,7 @@ import sysmanager
 import vcenter
 import vcenterdatacenter
 import objectuser
-import objectcos
+import objectvpool
 import secretkeyuser
 import protectionsystem
 import consistencygroup
@@ -136,7 +136,7 @@ protectionsystem.protectionsystem_parser(module_parsers, common_parser)
 vcenter.vcenter_parser(module_parsers, common_parser)
 vcenterdatacenter.vcenterdatacenter_parser(module_parsers, common_parser)
 objectuser.objectuser_parser(module_parsers, common_parser)
-objectcos.objectcos_parser(module_parsers, common_parser)
+objectvpool.objectvpool_parser(module_parsers, common_parser)
 secretkeyuser.secretkeyuser_parser(module_parsers, common_parser)
 networksystem.networksystem_parser(module_parsers, common_parser)
 network.network_parser(module_parsers, common_parser)

@@ -229,9 +229,9 @@ class Tenant(object):
 		project_uri = None
 
 		if( cos ):
-            	    from objectcos import Objectcos
-            	    obj = Objectcos(self.__ipAddr, self.__port)
-            	    cos_uri = obj.objectcos_query( cos)
+            	    from objectvpool import ObjectVpool
+            	    obj = ObjectVpool(self.__ipAddr, self.__port)
+            	    cos_uri = obj.objectvpool_query( cos)
 
         	if( project ):
             	    from project import Project
@@ -256,7 +256,7 @@ class Tenant(object):
             	    parms['vdcs'][0]['default_object_project'] = project_uri
 
 		if ( cos_uri != None ):
-            	    parms['vdcs'][0]['default_object_store'] = cos_uri
+            	    parms['vdcs'][0]['default_data_services_vpool'] = cos_uri
 
 
 
@@ -1371,7 +1371,7 @@ def get_tenant_vcenters(args):
 def create_namespace_parser(subcommand_parsers, common_parser):
     # role  command parser
     create_namespace_parser = subcommand_parsers.add_parser('create',
-                                description='ViPR Tenant Create Namespace CLI usage.',
+                                description='ViPR Create Namespace CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='create a namespace')
@@ -1394,10 +1394,10 @@ def create_namespace_parser(subcommand_parsers, common_parser):
                                  dest='project',
                                  metavar='<project>')
 
-    create_namespace_parser.add_argument('-cos',
-                                 help='name of Object COS',
-                                 dest='cos',
-                                 metavar='<cos>')
+    create_namespace_parser.add_argument('-objectvpool',
+                                 help='name of Object Vpool',
+                                 dest='objectvpool',
+                                 metavar='<objectvpool>')
 
     create_namespace_parser.set_defaults(func=tenant_create_namespace)
 
@@ -1407,7 +1407,7 @@ def tenant_create_namespace(args):
     obj = Tenant(args.ip, args.port)
     
     try:
-        obj.tenant_create_namespace(args.tenant, args.namespace, args.project, args.cos)
+        obj.tenant_create_namespace(args.tenant, args.namespace, args.project, args.objectvpool)
     except SOSError as e:
         raise e
 
@@ -1538,7 +1538,7 @@ def list_namespaces(args):
 		tmp = obj.show_namespace(uri)
 		
     		objTenant = Tenant(args.ip, args.port)
-		tenantval = objTenant.tenant_show_by_uri(tmp['zones']['ZONE0']['tenant'])
+		tenantval = objTenant.tenant_show_by_uri(tmp['vdcs']['ZONE0']['tenant'])
 		tmp['tenantname'] = tenantval['name']
                 output.append(tmp)
 

@@ -215,10 +215,10 @@ class VcenterDatacenter(object):
     
     def vcenterdatacenter_get_details(self, vcenterdatacenters):
 	lst = []
-	print vcenterdatacenters
 	for iter in vcenterdatacenters:
 	    dtls = self.vcenterdatacenter_show_by_uri(iter['id'])
-	    lst.append(dtls)
+	    if(dtls):
+	        lst.append(dtls)
 
 	return lst
 	    
@@ -344,8 +344,10 @@ def vcenterdatacenter_show(args):
     obj = VcenterDatacenter(args.ip, args.port)
     try:
         res = obj.vcenterdatacenter_show(args.name, args.vcenter, args.tenant, args.xml)
+
 	if(not res):
-	    return
+	    raise SOSError(SOSError.NOT_FOUND_ERR,
+                  "vcenterdatacenter " + args.name + ": not found")
 
 	if(args.xml):
             return common.format_xml(res)

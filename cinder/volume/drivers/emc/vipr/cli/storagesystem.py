@@ -37,6 +37,10 @@ class StorageSystem(object):
   
     URI_STORAGESYSTEM_UNMANAGED_VOLUMES = '/vdc/storage-systems/{0}/unmanaged/volumes'
     URI_STORAGESYSTEM_UNMANAGED_FILESYSTEMS = '/vdc/storage-systems/{0}/unmanaged/filesystems'
+    URI_STORAGESYSTEM_DISCOVER_UNMANAGED_VOLUMES  = '/vdc/storage-systems/{0}/discover?namespace=UNMANAGED_VOLUMES'
+    URI_STORAGESYSTEM_DISCOVER_UNMANAGED_FILESHARE = '/vdc/storage-systems/{0}/discover?namespace=UNMANAGED_FILESYSTEMS'
+
+
 
     SYSTEM_TYPE_LIST = ['isilon', 'vnxblock', 'vnxfile', 'vmax', 'netapp', 'vplex']
     
@@ -430,53 +434,73 @@ class StorageSystem(object):
                             "Storage system with name: " + 
                             attribval["name"] + " of type: " + 
                             attribval["type"] + " not found")
-       
-    def get_storagesystem_id(self, **attribval):
+            
+            
+    def discover_unmanaged_volumes(self, serialnum, name, systype):
 
         '''
-        Returns details of a storage system based on its name or UUID
+        Discovered the unmanaged volumes of a storage system based on its name or UUID
         Parameters:
             name: name of storage system
             serialnum : serial number of storage system
-            type: type of storage system
+            systype: type of storage system
         Returns:
-            a Response payload of system id
-        Throws:
-            SOSError - if id or name not found
+            Success or failure exception
         '''
+        
+        if(serialnum):
+            ssid = self.query_by_serial_number_and_type(serialnum, systype)
+        else:    
+            ssid = self.query_by_name_and_type(name, systype)
+            
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                                             StorageSystem.URI_STORAGESYSTEM_DISCOVER_UNMANAGED_VOLUMES.format(ssid),
+                                              None)
+        o = common.json_decode(s)
+        return o
+    
+    def discover_unmanaged_fileshares(self, serialnum, name, systype):
 
-        if("serialnum" in attribval and "type" in attribval):
-            return  self.query_by_serial_number_and_type(attribval["serialnum"], attribval["type"])
-
-        elif("name" in attribval and "type" in attribval):
-            storage_systems = self.list_systems_by_query(type=attribval["type"])
-            if(len(storage_systems) > 0):
-                for system in storage_systems:
-                    if( ( ("name" in system and system["name"] == attribval["name"])
-                        or("name" not in system and "native_guid" in system and system["native_guid"] == attribval["name"]) )
-                        and
-                       (system["system_type"] == attribval["type"])):
-                        return system['id']
-
-            raise SOSError(SOSError.NOT_FOUND_ERR,
-                            "Storage system with name: " +
-                            attribval["name"] + " of type: " +
-                            attribval["type"] + " not found")
-
-    def unmanaged_volumes(self, **attribval):
+        '''
+        Discovered the unmanaged fileshares of a storage system based on its name or UUID
+        Parameters:
+            name: name of storage system
+            serialnum : serial number of storage system
+            systype: type of storage system
+        Returns:
+            Success or failure exception
+        '''
+        
+        if(serialnum):
+            ssid = self.query_by_serial_number_and_type(serialnum, systype)
+        else:    
+            ssid = self.query_by_name_and_type(name, systype)
+            
+        (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST",
+                                             StorageSystem.URI_STORAGESYSTEM_DISCOVER_UNMANAGED_FILESHARE.format(ssid),
+                                              None)
+        o = common.json_decode(s)
+        return o
+           
+    def get_unmanaged_volumes(self, serialnum, name, systype):
 
         '''
         Returns details of a storage system based on its name or UUID
         Parameters:
             name: name of storage system
             serialnum : serial number of storage system
-            type: type of storage system
+            systype: type of storage system
         Returns:
             a Response payload of list of unmanaged volume ids
         Throws:
             SOSError - if id or name not found
         '''
-        ssid = self.get_storagesystem_id(**attribval)
+        
+        if(serialnum):
+            ssid = self.query_by_serial_number_and_type(serialnum, systype)
+        else:    
+            ssid = self.query_by_name_and_type(name, systype)
+            
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
                                              StorageSystem.URI_STORAGESYSTEM_UNMANAGED_VOLUMES.format(ssid),
                                               None)
@@ -486,20 +510,23 @@ class StorageSystem(object):
 
         return common.get_node_value(o, 'unmanaged_volume')
 
-    def unmanaged_filesystems(self, **attribval):
+    def get_unmanaged_filesystems(self, serialnum, name, systype):
 
         '''
         Returns details of a storage system based on its name or UUID
         Parameters:
             name: name of storage system
             serialnum : serial number of storage system
-            type: type of storage system
+            systype: type of storage system
         Returns:
             a Response payload of list of unmanaged volume ids
         Throws:
             SOSError - if id or name not found
         '''
-        ssid = self.get_storagesystem_id(**attribval)
+        if(serialnum):
+            ssid = self.query_by_serial_number_and_type(serialnum, systype)
+        else:    
+            ssid = self.query_by_name_and_type(name, systype)
 
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET",
                                              StorageSystem.URI_STORAGESYSTEM_UNMANAGED_FILESYSTEMS.format(ssid),
@@ -920,14 +947,14 @@ def storagesystem_show(args):
         raise e
 
 # get unmanaged volumes  command parser
-def um_volume_parser(subcommand_parsers, common_parser):
-    um_volume_parser = subcommand_parsers.add_parser('get_unmanagedvolumes',
+def um_volume_get_parser(subcommand_parsers, common_parser):
+    um_volume_get_parser = subcommand_parsers.add_parser('get_unmanagedvolumes',
                                 description='ViPR Storage system get unmanaged volumes  CLI usage',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='show list of uumanaged volumes details')
-    mutex_group = um_volume_parser.add_mutually_exclusive_group(required=True)
-    mandatory_args = um_volume_parser.add_argument_group('mandatory arguments')
+    mutex_group = um_volume_get_parser.add_mutually_exclusive_group(required=True)
+    mandatory_args = um_volume_get_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-t', '-type',
                              dest='type',
                              help='Type of storage system',
@@ -943,29 +970,26 @@ def um_volume_parser(subcommand_parsers, common_parser):
                                help='Serial number of the storage system')
 
 
-    um_volume_parser.set_defaults(func=storagesystem_unmanaged_volumes)
+    um_volume_get_parser.set_defaults(func=get_unmanaged_volumes)
 
-def storagesystem_unmanaged_volumes(args):
+def get_unmanaged_volumes(args):
     obj = StorageSystem(args.ip, args.port)
     try:
-        if(args.serialnum):
-            res = obj.unmanaged_volumes( serialnum=args.serialnum, type=args.type)
-        else:
-            res = obj.unmanaged_volumes( name=args.name, type=args.type)
-
-        return common.format_json_object(res)
+        res = obj.get_unmanaged_volumes( args.serialnum, args.name, args.type)
+        if(len(res) > 0):
+            return common.format_json_object(res)
     except SOSError as e:
-        raise e
-
+        common.format_err_msg_and_raise("get unmanaged volumes", "storagesystem", e.err_text, e.err_code)
+        
 # get unmanaged volumes  command parser
-def um_fileshare_parser(subcommand_parsers, common_parser):
-    um_fileshare_parser = subcommand_parsers.add_parser('get_unmanagedfilesystems',
+def um_fileshare_get_parser(subcommand_parsers, common_parser):
+    um_fileshare_get_parser = subcommand_parsers.add_parser('get_unmanagedfilesystems',
                                 description='ViPR Storage system get unmanaged filesystems  CLI usage',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='show list of uumanaged filesystems details')
-    mutex_group = um_fileshare_parser.add_mutually_exclusive_group(required=True)
-    mandatory_args = um_fileshare_parser.add_argument_group('mandatory arguments')
+    mutex_group = um_fileshare_get_parser.add_mutually_exclusive_group(required=True)
+    mandatory_args = um_fileshare_get_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-t', '-type',
                              dest='type',
                              help='Type of storage system',
@@ -981,20 +1005,84 @@ def um_fileshare_parser(subcommand_parsers, common_parser):
                                help='Serial number of the storage system')
 
 
-    um_fileshare_parser.set_defaults(func=storagesystem_unmanaged_filesystems)
+    um_fileshare_get_parser.set_defaults(func=get_unmanaged_filesystems)
 
-def storagesystem_unmanaged_filesystems(args):
+def get_unmanaged_filesystems(args):
     obj = StorageSystem(args.ip, args.port)
     try:
-        if(args.serialnum):
-            res = obj.unmanaged_filesystems( serialnum=args.serialnum, type=args.type)
-        else:
-            res = obj.unmanaged_filesystems( name=args.name, type=args.type)
-
-        return common.format_json_object(res)
+        res = obj.get_unmanaged_filesystems( args.serialnum, args.name, args.type)
+        if(len(res) > 0):  
+            return common.format_json_object(res)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("get unmanaged fileshares", "storagesystem", e.err_text, e.err_code)
 
+
+    
+# discover unmanaged volumes  command parser
+def um_volume_discover_parser(subcommand_parsers, common_parser):
+    um_volume_discover_parser = subcommand_parsers.add_parser('discover_unmanagedvolumes',
+                                description='ViPR Storage system discover unmanaged volumes  CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Discover unmanaged volumes details')
+    mutex_group = um_volume_discover_parser.add_mutually_exclusive_group(required=True)
+    mandatory_args = um_volume_discover_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-t', '-type',
+                             dest='type',
+                             help='Type of storage system',
+                             choices=StorageSystem.SYSTEM_TYPE_LIST,
+                             required=True)
+    mutex_group.add_argument('-n', '-name',
+                             metavar='<name>',
+                             dest='name',
+                             help='Name of storage system')
+    mutex_group.add_argument('-sn', '-serialnumber',
+                               dest='serialnum',
+                               metavar='<serialnumber>',
+                               help='Serial number of the storage system')
+
+
+    um_volume_discover_parser.set_defaults(func=discover_unmanaged_volumes)
+
+def discover_unmanaged_volumes(args):
+    obj = StorageSystem(args.ip, args.port)
+    try:
+        res = obj.discover_unmanaged_volumes( args.serialnum, args.name, args.type)
+    except SOSError as e:
+        common.format_err_msg_and_raise("discover unmanaged volumes", "storagesystem", e.err_text, e.err_code)
+    
+# discover unmanaged fileshares  command parser
+def um_fileshare_discover_parser(subcommand_parsers, common_parser):
+    um_fileshare_discover_parser = subcommand_parsers.add_parser('discover_unmanagedfilesystems',
+                                description='ViPR Storage system discover unmanaged filesystems  CLI usage',
+                                parents=[common_parser],
+                                conflict_handler='resolve',
+                                help='Discover unmanaged filesystems details')
+    mutex_group = um_fileshare_discover_parser.add_mutually_exclusive_group(required=True)
+    mandatory_args = um_fileshare_discover_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-t', '-type',
+                             dest='type',
+                             help='Type of storage system',
+                             choices=StorageSystem.SYSTEM_TYPE_LIST,
+                             required=True)
+    mutex_group.add_argument('-n', '-name',
+                             metavar='<name>',
+                             dest='name',
+                             help='Name of storage system')
+    mutex_group.add_argument('-sn', '-serialnumber',
+                               dest='serialnum',
+                               metavar='<serialnumber>',
+                               help='Serial number of the storage system')
+
+
+    um_fileshare_discover_parser.set_defaults(func=discover_unmanaged_fileshares)
+
+def discover_unmanaged_fileshares(args):
+    obj = StorageSystem(args.ip, args.port)
+    try:
+        res = obj.discover_unmanaged_fileshares( args.serialnum, args.name, args.type)
+    except SOSError as e:
+        common.format_err_msg_and_raise("discover unmanaged fileshares", "storagesystem", e.err_text, e.err_code)
 
 
 # connectivity command parser
@@ -1304,8 +1392,15 @@ def storagesystem_parser(parent_subparser, common_parser):
     update_parser(subcommand_parsers, common_parser)
     
     # unmanaged volumes  command parser
-    um_volume_parser(subcommand_parsers, common_parser)
+    um_volume_get_parser(subcommand_parsers, common_parser)
 
-    # update storage system command parser
-    um_fileshare_parser(subcommand_parsers, common_parser)
+    # unmanaged fileshare  command parser
+    um_fileshare_get_parser(subcommand_parsers, common_parser)
+    
+    # unmanaged volume discover  command parser
+    um_volume_discover_parser(subcommand_parsers, common_parser)
+    
+    # unmanaged fileshare discover  command parser
+    um_fileshare_discover_parser(subcommand_parsers, common_parser)
+    
 

@@ -101,9 +101,10 @@ class Network(object):
                       
         
         tz = self.show_by_uri(turi)
-        if (tz is not None and tz['name'] == name):
+        if ( (tz is not None and tz['name'] == name) or (tz is not None and tz['id'] == name) ):
             tz = self.show_by_uri(turi, xml)
             return tz
+
         raise SOSError(SOSError.NOT_FOUND_ERR, "Network " + 
                         str(name) + ": not found")
     
@@ -149,32 +150,6 @@ class Network(object):
                       
 
         
-    def show(self, name, varray, xml=False):
-        '''
-        Retrieves network details based on network name
-        Parameters:
-            name: name of the network. 
-        Returns:
-            Network details in JSON response payload
-        '''
-        
-        turi = self.network_query(name, varray)
-                      
-        
-        tz = self.show_by_uri(turi)
-        if (tz is not None and tz['name'] == name):
-            tz = self.show_by_uri(turi, xml)
-            return tz
-        raise SOSError(SOSError.NOT_FOUND_ERR, "Network " + 
-                        str(name) + ": not found")
-        tz = self.show_by_uri(turi)
-        if (tz is not None and tz['name'] == name):
-            tz = self.show_by_uri(turi, xml)
-            return tz
-        raise SOSError(SOSError.NOT_FOUND_ERR, "Network " + 
-                        str(name) + ": not found")
-
-
     # Shows network information given its uri
     def show_by_uri(self, uri, xml=False):
         '''
@@ -416,14 +391,18 @@ class Network(object):
         Returns:
             Network details in JSON response payload
         '''
+        if (common.is_uri(name)):
+            return name
+
         networks = self.list_networks(varray)
 	for zone in networks:
             tzone = common.show_by_href(self.__ipAddr, self.__port, zone)
 	    if(tzone):
+		if( ((varray) and (tzone.has_key('varray'))) or ((varray is None) and ( tzone.has_key('varray') == False)) ):
+                    if (tzone['name'] == name):
+                        return tzone['id']  
 
-                if (tzone['name'] == name):
-                    return tzone['id']  
-        raise SOSError(SOSError.NOT_FOUND_ERR, "Transport-zone " + 
+        raise SOSError(SOSError.NOT_FOUND_ERR, "Network " + 
                         name + ": not found")
 
 
@@ -598,11 +577,10 @@ def show_parser(subcommand_parsers, common_parser):
                                 metavar='<network>',
                                 dest='name',
                                 required=True)
-    mandatory_args.add_argument('-varray', '-va',
+    show_parser.add_argument('-varray', '-va',
                                 metavar='<varray>',
                                 dest='varray',
-                                help='Name of varray',
-                                required=True)
+                                help='Name of varray')
     show_parser.add_argument('-xml',
                                dest='xml',
                                action='store_true',

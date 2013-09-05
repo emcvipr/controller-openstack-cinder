@@ -78,7 +78,7 @@ class StoragePool(object):
         from storagesystem import StorageSystem
         if (not common.is_uri(devicename)):
             obj = StorageSystem(self.__ipAddr, self.__port)
-	    if(serialnumber):
+	    if(not serialnumber or len(serialnumber)> 0):
 		device_id = obj.query_by_serial_number_and_type(serialnumber, devicetype)
 	    else:
                 device = obj.show(name=devicename, type=devicetype)        
@@ -979,8 +979,9 @@ def storagepool_list(args):
         output=[]
         for uri in uris:
             result = obj.storagepool_show_by_uri(device_id,uri)
+
              #adding new column storage tier names assicated with pools
-            if("tier_utilization_percentages" in result and args.long==True):
+            if("tier_utilization_percentages" in result and args.long==True and (result['registration_status']=='REGISTERED') ):
                 tierUtilizationPercentages = result['tier_utilization_percentages']
                 #Go and fetch storage-tiers only if the utilization value is present
                 #Assumption here is, if there some utilization value, then such a pool has storage tiers
@@ -1158,12 +1159,16 @@ def storagepool_update(args):
     try:
 	if( args.maxpoolutilization ):
 	    if ( (int(args.maxpoolutilization) > 100) or (int(args.maxpoolutilization) < 0) ) :
-	        print "Please ensure max pool utilization is >=0 and <=100"
-	        return
+                raise SOSError(SOSError.CMD_LINE_ERR,
+                        "Please ensure max pool utilization is >=0 and <=100")
 	if(args.maxthinpoolsubscription):
 	    if( 0 > int(args.maxthinpoolsubscription) ):
-	        print "Please ensure max thin pool subscription is >=0"
-	        return
+                raise SOSError(SOSError.CMD_LINE_ERR,
+                        "Please ensure max thin pool subscription is >=0")
+        if(args.maxresources):
+            if( 0 > int(args.maxresources) ):
+                raise SOSError(SOSError.CMD_LINE_ERR,
+                        "Please ensure max resources is >=0")
 
         res = obj.storagepool_update(args.storagesystem, args.serialnumber, args.type, args.name, args.nhadd, args.nhrem , args.volumetype, args.maxresources, args.maxpoolutilization, args.maxthinpoolsubscription)
 

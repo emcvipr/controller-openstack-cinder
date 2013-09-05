@@ -42,6 +42,7 @@ class Authentication(object):
     HEADERS = {'Content-Type': 'application/json', 'ACCEPT': 'application/json', 'X-EMC-REST-CLIENT': 'TRUE'}
     SEARCH_SCOPE=['ONELEVEL','SUBTREE']
     BOOL_VALS=['true','false']
+    ZONE_ROLES=['SYSTEM_ADMIN', 'SECURITY_ADMIN', 'SYSTEM_MONITOR', 'SYSTEM_AUDITOR' ]
 
     def __init__(self, ipAddr, port):
         '''
@@ -706,7 +707,7 @@ def list_authentication_provider(args):
                 return common.format_json_object(output)
             elif(args.long == True):
                 from common import TableGenerator
-                TableGenerator(output, [ 'module/name', 'server_urls', 'mode', 'domains','server_cert','group_attribute']).printTable()
+                TableGenerator(output, [ 'module/name', 'server_urls', 'mode', 'domains','group_attribute']).printTable()
             else:
                 from common import TableGenerator
                 TableGenerator(output, [ 'module/name','server_urls','mode']).printTable()
@@ -841,9 +842,10 @@ def show_auth_provider_parser(subcommand_parsers, common_parser):
 
 
     mandatory_args.add_argument('-name',
-                		 metavar='<name>',
+                		metavar='<name>',
                                 help='name of the authentication provider',
-                		dest='name')
+                		dest='name',
+				required=True)
 
 
     show_auth_provider_parser.add_argument('-xml',
@@ -935,7 +937,7 @@ def add_vdc_role_parser(subcommand_parsers , common_parser):
                                 help='role to be added',
                                 dest='role',
                                 required=True,
-				choices=['SYSTEM_ADMIN', 'SECURITY_ADMIN' ])
+				choices=Authentication.ZONE_ROLES)
 
 
     arggroup =  add_vdc_role_parser.add_mutually_exclusive_group(required=True)
@@ -1011,7 +1013,7 @@ def delete_role_parser(subcommand_parsers, common_parser):
                                 help='role to be added',
                                 dest='role',
                                 required=True,
-				choices=['SYSTEM_ADMIN', 'SECURITY_ADMIN' ])
+				choices=Authentication.ZONE_ROLES)
 
 
     arggroup =  delete_role_parser.add_mutually_exclusive_group(required=True)

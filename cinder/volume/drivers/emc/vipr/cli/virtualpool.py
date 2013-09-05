@@ -38,6 +38,7 @@ class VirtualPool(object):
     URI_VPOOL_ASSIGN_POOLS  = URI_VPOOL_SHOW + "/assign-matched-pools"
     
     PROTOCOL_TYPE_LIST = ['FC', 'iSCSI', 'NFS', 'CIFS']
+    CONDITION_TYPE = ['true', 'false'] 
     
     def __init__(self, ipAddr, port):
         '''
@@ -178,7 +179,7 @@ class VirtualPool(object):
 
         body = json.dumps(parms)
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                             "POST",
+                                             "PUT",
                                              self.URI_VPOOL_ACL.format(type, uri), body)
         return s  
 
@@ -289,7 +290,7 @@ class VirtualPool(object):
     def vpool_create(self, name, description,  type, protocols, 
                    multipaths, varrays, provisiontype, protectionvpool,
                    systemtype, raidlevel, fastpolicy, drivetype, expandable, usematchedpools,
-                   max_snapshots, max_mirrors, vpoolmirror, multivolconsistency):
+                   max_snapshots, max_mirrors, vpoolmirror, multivolconsistency, autotierpolicynames):
         '''
         This is the function will create the VPOOL with given name and type.
         It will send REST API request to ViPR instance.
@@ -373,6 +374,9 @@ class VirtualPool(object):
                     if(expandable):
                         parms['expandable'] = expandable
                         
+                    if(autotierpolicynames):
+                        parms['unique_auto_tier_policy_names'] = autotierpolicynames
+                        
                     if (multivolconsistency):
                         parms['multi_volume_consistency'] = multivolconsistency
                     
@@ -399,11 +403,14 @@ class VirtualPool(object):
                                 copyParam = copy.split(":")
                                 copy = dict()
                                 copy['varray'] = nh_obj.varray_query(copyParam[0])
-                                copy['vpool'] = self.vpool_query(copyParam[1], "block")
                                 try:
+                                    if(len(copyParam) > 1):
+                                        copy['vpool'] = self.vpool_query(copyParam[1], "block")
+
                                     copyPolicy = dict()
-                                    copyPolicy['journal_size'] = copyParam[2]
-                                    copy['policy'] = copyPolicy
+                                    if(len(copyParam) > 2):
+                                        copyPolicy['journal_size'] = copyParam[2]
+                                        copy['policy'] = copyPolicy
                                 except:
                                     pass
                                 copyEntries.append(copy)
@@ -418,7 +425,7 @@ class VirtualPool(object):
                             block_vpool_protection_param['snapshots'] = vpool_protection_snapshot_params
                         # block protection 
                         parms['protection'] = block_vpool_protection_param
-                  
+
                 body = json.dumps(parms)
 
                 (s, h) = common.service_json_request(self.__ipAddr, self.__port,
@@ -434,7 +441,7 @@ class VirtualPool(object):
     
     def vpool_update(self, name, label, description,  type, protocol_add, protocol_remove, 
                    varray_add, varray_remove, multipaths, use_matched_pools,
-                   max_snapshots, max_mirrors, multivolconsistency):
+                   max_snapshots, max_mirrors, multivolconsistency,expandable, autotierpolicynames):
         '''
         This is the function will update the VPOOL.
         It will send REST API request to ViPR instance.
@@ -523,7 +530,12 @@ class VirtualPool(object):
                 parms['use_matched_pools'] = "true"
             else:
                 parms['use_matched_pools'] = "false"
-
+                
+        if(expandable):
+            parms['expandable'] = expandable
+                        
+        if(autotierpolicynames):
+            parms['unique_auto_tier_policy_names'] = autotierpolicynames
 
         body = json.dumps(parms)
         (s, h) = common.service_json_request(self.__ipAddr, self.__port,
@@ -674,7 +686,14 @@ def create_parser(subcommand_parsers, common_parser):
     create_parser.add_argument('-expandable','-ex',
                                help='Indicates if non disruptive volume expansion should be supported',
                                dest='expandable',
-                               action='store_true') 
+                               metavar='<expandable>',
+                               choices=VirtualPool.CONDITION_TYPE) 
+    create_parser.add_argument('-autotierpolicynames','-apn',
+                               help='unique_auto_tier_policy_names for fastpolicy',
+                               dest='autotierpolicynames',
+                               metavar='<unique_auto_tier_policy_names>',
+                               choices=VirtualPool.CONDITION_TYPE) 
+
 
     create_parser.set_defaults(func=vpool_create)
 
@@ -698,13 +717,14 @@ def vpool_create(args):
                              args.max_snapshots,
                              args.max_mirrors,
                              args.vpoolmirror,
-                             args.multivolconsistency)
+                             args.multivolconsistency,
+                             args.autotierpolicynames)
     except SOSError as e:
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL " + args.name + 
  			  " ("+ args.type + ") " + ": Create failed\n" + e.err_text )
         else:
-            raise e
+            common.format_err_msg_and_raise("create", "vpool", e.err_text, e.err_code)
         
 # VPOOL Update routines
 
@@ -782,6 +802,18 @@ def update_parser(subcommand_parsers, common_parser):
                 metavar='<multivolconsistency>',
                 dest='multivolconsistency',
                 choices=['true', 'false'])
+    update_parser.add_argument('-expandable','-ex',
+                               help='enable/disable Indicates if non disruptive volume expansion should be supported',
+                               dest='expandable',
+                               metavar='<expandable>',
+                               choices=VirtualPool.CONDITION_TYPE) 
+    update_parser.add_argument('-autotierpolicynames','-apn',
+                               help='enable/disable unique_auto_tier_policy_names for fastpolicy',
+                               dest='autotierpolicynames',
+                               metavar='<unique_auto_tier_policy_names>',
+                               choices=VirtualPool.CONDITION_TYPE) 
+
+    
 
     update_parser.set_defaults(func=vpool_update)
 
@@ -801,7 +833,9 @@ def vpool_update(args):
                              args.usematchedpools,
                              args.max_snapshots,
                              args.max_mirrors,
-                             args.multivolconsistency)
+                             args.multivolconsistency,
+                             args.expandable,
+                             args.autotierpolicynames)
     except SOSError as e:
         common.format_err_msg_and_raise("update", "vpool", e.err_text, e.err_code)
 
@@ -839,7 +873,7 @@ def vpool_delete(args):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL " + args.name + 
                           " ("+ args.type + ") " + ": Delete failed\n"  + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("delete", "vpool", e.err_text, e.err_code)
         
 
 # VPOOL Show routines
@@ -878,7 +912,7 @@ def vpool_show(args):
             return common.format_xml(res)
         return common.format_json_object(res)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("show", "vpool", e.err_text, e.err_code)
 
 
 # VPOOL get pools routines
@@ -917,7 +951,7 @@ def vpool_getpools(args):
             from common import TableGenerator
             TableGenerator(pools, ['pool_name','supported_volume_types','operational_status','storagesystem_guid']).printTable() 
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("get_pools", "vpool", e.err_text, e.err_code)
 
 # VPOOL refresh pools routines
 
@@ -955,7 +989,7 @@ def vpool_refreshpools(args):
             from common import TableGenerator
             TableGenerator(pools, ['pool_name','supported_volume_types','operational_status','storagesystem_guid']).printTable()
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("refresh_pools", "vpool", e.err_text, e.err_code)
 
 # VPOOL add pools routines
 
@@ -965,7 +999,7 @@ def addpools_parser(subcommand_parsers, common_parser):
                 description='ViPR VPOOL add  storage pools CLI usage',
                 parents=[common_parser],
                 conflict_handler='resolve',
-                help='Add assinged  storage pools of a VPOOL')
+                help='Add assigned  storage pools of a VPOOL')
     mandatory_args = addpools_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-name','-n',
                 help='name of VPOOL',
@@ -1005,7 +1039,7 @@ def vpool_addpools(args):
                                args.devicetype)
         #return common.format_json_object(res)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("add_pools", "vpool", e.err_text, e.err_code)
 
 # VPOOL remove pools routines
 
@@ -1015,7 +1049,7 @@ def removepools_parser(subcommand_parsers, common_parser):
                 description='ViPR VPOOL remove  storage pools CLI usage',
                 parents=[common_parser],
                 conflict_handler='resolve',
-                help='Remove assinged  storage pools of a VPOOL')
+                help='Remove assigned  storage pools of a VPOOL')
     mandatory_args = removepools_parser.add_argument_group('mandatory arguments')
     mandatory_args.add_argument('-name','-n',
                 help='name of VPOOL',
@@ -1050,12 +1084,12 @@ def vpool_removepools(args):
 
     obj = VirtualPool(args.ip, args.port)
     try:
-        res = obj.vpool_removepools(args.name, args.type, 
+        obj.vpool_removepools(args.name, args.type, 
                                   args.pools, args.serialnumber,
                                   args.devicetype)
         #return common.format_json_object(res)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("remove_pools", "vpool", e.err_text, e.err_code)
 
 
 
@@ -1093,9 +1127,9 @@ def vpool_allow_tenant(args):
 
     obj = VirtualPool(args.ip, args.port)
     try:
-        res = obj.vpool_allow_tenant(args.name, args.type, args.tenant)
+        obj.vpool_allow_tenant(args.name, args.type, args.tenant)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("allow", "vpool", e.err_text, e.err_code)
 
 
 # VPOOL remove tenant  routines
@@ -1130,9 +1164,9 @@ def vpool_remove_tenant(args):
 
     obj = VirtualPool(args.ip, args.port)
     try:
-        res = obj.vpool_remove_tenant(args.name, args.type, args.tenant)
+        obj.vpool_remove_tenant(args.name, args.type, args.tenant)
     except SOSError as e:
-        raise e
+        common.format_err_msg_and_raise("disallow", "vpool", e.err_text, e.err_code)
 
 
 # VPOOL List routines
@@ -1196,7 +1230,7 @@ def vpool_list(args):
         if (e.err_code == SOSError.SOS_FAILURE_ERR):
             raise SOSError(SOSError.SOS_FAILURE_ERR, "VPOOL list failed\n"  + e.err_text)
         else:
-            raise e
+            common.format_err_msg_and_raise("list", "vpool", e.err_text, e.err_code)
       
 #
 # VirtualPool Main parser routine

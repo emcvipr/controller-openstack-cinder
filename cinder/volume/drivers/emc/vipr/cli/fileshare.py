@@ -1090,7 +1090,8 @@ def unmanaged_filesystem_ingest(args):
 def unmanaged_filesystem_show(args):
     obj = Fileshare(args.ip, args.port)
     try:
-        res = obj.unmanaged_filesystem_show(args.volume)
+        res = obj.unmanaged_filesystem_show(args.filesystem)
+        return common.format_json_object(res)
     except SOSError as e:
         raise e
             

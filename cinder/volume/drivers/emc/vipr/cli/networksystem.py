@@ -317,17 +317,10 @@ def networksystem_create(args):
 	passwd = None
 	smispassword = None
 	if (args.user and len(args.user) > 0):
-	    if sys.stdin.isatty():
-                passwd = getpass.getpass(prompt="Enter password of the network system: ")
-            else:
-                passwd = sys.stdin.readline().rstrip()
+	    passwd =  common.get_password("network system")
 
 	if (args.smisuser and len(args.smisuser) > 0):
-	    if sys.stdin.isatty():
-                smispassword = getpass.getpass(prompt="Enter SMIS password of the network system: ")
-            else:
-                smispassword = sys.stdin.readline().rstrip()
-
+	    smispassword = common.get_password("SMIS for network system")
 
         res = obj.networksystem_create(args.name,args.type, args.deviceip, args.deviceport, args.user, passwd, args.smisip, args.smisport,
 					args.smisuser, smispassword , args.smisssl)
@@ -601,7 +594,7 @@ def networksystem_list(args):
 		return common.format_json_object(output)
 	    elif(args.long == True):
 		from common import TableGenerator
-                TableGenerator(output, [ 'name', 'system_type','ip_address']).printTable()
+                TableGenerator(output, [ 'name', 'system_type','ip_address','registration_status','job_discovery_status']).printTable()
             else:
 		from common import TableGenerator
                 TableGenerator(output, [ 'name']).printTable()
@@ -632,7 +625,6 @@ def networksystem_register(args):
     try:
         res = obj.networksystem_register(args.name)
 
-        return common.format_json_object(res)
     except SOSError as e:
 	common.format_err_msg_and_raise("register", "networksystem", e.err_text, e.err_code)
 
@@ -659,7 +651,6 @@ def networksystem_deregister(args):
     try:
         res = obj.networksystem_deregister(args.name)
 
-        return common.format_json_object(res)
     except SOSError as e:
 	common.format_err_msg_and_raise("deregister", "networksystem", e.err_text, e.err_code)
 

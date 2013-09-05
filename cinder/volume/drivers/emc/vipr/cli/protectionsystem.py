@@ -32,6 +32,7 @@ class ProtectionSystem(object):
     URI_PROTECTION_SYSTEM_DISCOVER       = URI_PROTECTION_SYSTEMS + "/{0}/discover"
     URI_PROTECTION_SYSTEM_CONNECTIVITY   = URI_PROTECTION_SYSTEMS + "/{0}/connectivity"
     URI_PROTECTION_SYSTEM_DEACTIVATE     = URI_PROTECTION_SYSTEMS + "/{0}/deactivate"
+    PROTECTION_TYPE = ['rp', 'continuous_copy', 'snapshot', 'full_copy']
 
     def __init__(self, ipAddr, port):
         '''
@@ -336,7 +337,7 @@ def create_parser(subcommand_parsers, common_parser):
                                 default='rp',
                                 dest='type',
                                 metavar='<pstype>',
-                                choices=['rp'])   
+                                choices=ProtectionSystem.PROTECTION_TYPE)   
     create_parser.add_argument( '-registration_mode', "-rm",
                                 help='registration_mode',
                                 dest='registration_mode',
@@ -393,7 +394,7 @@ def update_parser(subcommand_parsers, common_parser):
                                 default='rp',
                                 dest='type',
                                 metavar='<pstype>',
-                                choices=['rp'])   
+                                choices=ProtectionSystem.PROTECTION_TYPE)   
     
     update_parser.set_defaults(func=ps_update)
 
@@ -435,7 +436,7 @@ def delete_parser(subcommand_parsers, common_parser):
                                 default='rp',
                                 dest='type',
                                 metavar='<pstype>',
-                                choices=['rp'])
+                                choices=ProtectionSystem.PROTECTION_TYPE)
     delete_parser.set_defaults(func=ps_delete)
 
 def ps_delete(args):
@@ -526,7 +527,7 @@ def show_parser(subcommand_parsers, common_parser):
                                 default='rp',
                                 dest='type',
                                 metavar='<pstype>',
-                                choices=['rp'])
+                                choices=ProtectionSystem.PROTECTION_TYPE)
     show_parser.add_argument('-xml',  
                                dest='xml',
                                action='store_true',
@@ -583,11 +584,11 @@ def ps_list(args):
         if(len(output) > 0):
             if(args.long == True):
                 from common import TableGenerator
-                TableGenerator(output, ['native_guid', 'system_type', 'ip_address', 'port_number', 'installation_id', 'job_discovery_status' ]).printTable()
+                TableGenerator(output, ['name', 'system_type', 'ip_address', 'port_number', 'installation_id', 'job_discovery_status' ]).printTable()
             
 	    else:
 	        from common import TableGenerator
-                TableGenerator(output, ['native_guid', 'system_type', 'ip_address', 'port_number']).printTable()
+                TableGenerator(output, ['name', 'system_type', 'ip_address', 'port_number']).printTable()
             
     except SOSError as e:
         if (e.err_code == SOSError.SOS_FAILURE_ERR):

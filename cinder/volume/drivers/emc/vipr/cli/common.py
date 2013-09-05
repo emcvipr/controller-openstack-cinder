@@ -39,7 +39,7 @@ SWIFT_AUTH_TOKEN = 'X-Auth-Token'
 
 TIMEOUT_SEC = 20 # 20 SECONDS
 OBJCTRL_INSECURE_PORT           = '9010'
-OBJCTRL_PORT                    = '9011'
+OBJCTRL_PORT                    = '4443'
 
 def _decode_list(data):
     rv = []
@@ -459,12 +459,16 @@ def list_by_hrefs(ipAddr, port,  hrefs):
     for link in hrefs:
         href = link['link']
         hrefuri = href['href']
-        (s, h) = service_json_request(ipAddr, port,
+        #we need keep except to over exception from appliance, later we can take off
+        try:
+            (s, h) = service_json_request(ipAddr, port,
                                              "GET",
                                              hrefuri, None, None)
-        o = json_decode(s)
-        if(o['inactive'] == False):
-            output.append(o)
+            o = json_decode(s)
+            if(o['inactive'] == False):
+                output.append(o)
+        except:
+            pass
     return output
 
 def show_by_href( ipAddr, port, href):
@@ -473,13 +477,17 @@ def show_by_href( ipAddr, port, href):
     '''
     link = href['link']
     hrefuri = link['href']
-    (s, h) = service_json_request(ipAddr, port, "GET",
+    #we need keep except to over exception from appliance, later we can take off
+    try:
+        (s, h) = service_json_request(ipAddr, port, "GET",
                                               hrefuri, None, None)
-
-    o = json_decode(s)
-    if( o['inactive']):
-        return None
-    return o;
+        o = json_decode(s)
+        if( o['inactive']):
+            return None
+        return o
+    except:
+        pass
+    return None
 
 def create_file(file_path):
     '''
@@ -584,7 +592,6 @@ def getenv(envvarname, envdefaultvalue=None):
                 sosenv=soscli_dir_path
     return sosenv
 
-
 def _get_vipr_info(filename):
     if filename == None:
         return 
@@ -612,6 +619,19 @@ def _get_vipr_info(filename):
     # varray = config.get('DEFAULT', 'vipr_varray') 
     
     return
+
+'''
+Prompt the user to get the confirmation
+action could be "restart service", "reboot node", "poweroff cluster" etc
+'''
+def ask_continue(action):
+    print("Do you really want to "+action+"(y/n)?:")
+    response = sys.stdin.readline().rstrip()
+    
+    while(str(response) != "y" and str(response) != "n"):
+        response = ask_continue(action)
+    
+    return response
 
 #This method defines the standard and consistent error message format
 #for all CLI error messages. 

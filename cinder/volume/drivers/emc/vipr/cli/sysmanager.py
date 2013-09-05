@@ -16,6 +16,7 @@ import time
 import json
 import os
 import re
+import sysmgrcontrolsvc
 from common import SOSError
 from xml.etree import ElementTree
 
@@ -31,8 +32,6 @@ class Upgrade(object):
     URI_IMAGE_REMOVE = '/upgrade/image/remove'
     URI_INTERNAL_IMAGE = '/upgrade/internal/image?version={0}'
     URI_INTERNAL_WAKEUP = '/upgrade/internal/wakeup'
-    URI_NODES = '/nodes'
-    URI_STATS = '/stats'
     URI_IMAGE_UPLOAD='/upgrade/image/upload'
     
     DEFAULT_PORT="9993"
@@ -91,32 +90,6 @@ class Upgrade(object):
             return None
         o = common.json_decode(s)
         return o
-    
-    def get_cluster_nodes(self):
-            
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                              "GET", Upgrade.URI_NODES,
-                                              None)
-        if(not s):
-            return None
-        o = common.json_decode(s)
-        
-        ret_val = common.get_list(o, "node")
-        return ret_val
-        
-    
-    def get_system_status(self):
-            
-        (s, h) = common.service_json_request(self.__ipAddr, self.__port,
-                                              "GET", Upgrade.URI_STATS,
-                                              None)
-        if(not s):
-            return None
-        o = common.json_decode(s)
-        ret_val=None
-        if(o):
-            ret_val = common.get_node_value(o, "svc")
-        return ret_val
     
     def install_image(self, target_version, force=False):
         
@@ -532,6 +505,10 @@ class Logging(object):
         return o
 
     def add_license(self, args):
+	if(args.licensefile is ""):
+            raise SOSError(SOSError.CMD_LINE_ERR,
+                        "License file path can not be empty string")
+
 
         params =  self.prepare_license_body(args)
 
@@ -753,14 +730,14 @@ class Configuration(object):
 
        try:
            f  = open(propertiesfile, 'r')
-	   props = ''
+	   props = []
            for line in f :
-               props += line + ','
+               props.append(line)
 
        except Exception as e:
            raise SOSError(e.errno, e.strerror)
 
-       params = self.prepare_properties_body(props.split(','))
+       params = self.prepare_properties_body(props)
 
        if (params):
            body = json.dumps(params)
@@ -920,12 +897,12 @@ def get_alerts_parser(subcommand_parsers, common_parser):
 
 def get_alerts(args):
     obj = Logging(args.ip, Logging.DEFAULT_SYSMGR_PORT)
-    log = "alerts"
+    log = "systemevents"
     from common import TableGenerator
     try:
         res = obj.get_logs(log, args.severity,args.start, args.end, args.node, args.regular, args.format, args.maxcount, args.filepath)
     except SOSError as e:
-        common.format_err_msg_and_raise("get", "alerts", e.err_text, e.err_code)
+        common.format_err_msg_and_raise("get", log, e.err_text, e.err_code)
 
 
 def get_logs(args):
@@ -1121,42 +1098,6 @@ def get_target_version(args):
         res = obj.get_target_version()
         output = [res]
         TableGenerator(output, ["target_version"]).printTable()
-    except SOSError as e:
-        raise e
-    
-def cluster_list_parser(subcommand_parsers, common_parser):
-
-    cluster_list_parser = subcommand_parsers.add_parser('list',
-                                description='ViPR: CLI usage for listing nodes of the cluster',
-                                conflict_handler='resolve',
-                                help='Retrieves node IDs and IPs for all nodes in the cluster')
-    cluster_list_parser.set_defaults(func=get_cluster_list)
-    
-def get_cluster_list(args):
-    obj = Upgrade(args.ip, Upgrade.DEFAULT_SYSMGR_PORT)
-    try:
-        res = obj.get_cluster_nodes()
-        if(res and len(res) > 0):
-            from common import TableGenerator
-            TableGenerator(res, ["id","ip","hostname"]).printTable()
-    except SOSError as e:
-        raise e
-    
-def system_status_parser(subcommand_parsers, common_parser):
-
-    system_status_parser = subcommand_parsers.add_parser('status',
-                                description='ViPR: CLI usage for getting the status of services',
-                                conflict_handler='resolve',
-                                help='Retrieves status for each service on this node')
-    system_status_parser.set_defaults(func=get_system_status)
-    
-def get_system_status(args):
-    obj = Upgrade(args.ip, Upgrade.DEFAULT_SYSMGR_PORT)
-    try:
-        res = obj.get_system_status()
-        if(res):
-            from common import TableGenerator
-            TableGenerator(res, ["name","status"]).printTable()
     except SOSError as e:
         raise e
     
@@ -1377,7 +1318,7 @@ def send_alert_parser(subcommand_parsers, common_parser):
     send_alert_parser = subcommand_parsers.add_parser('send-alert',
                                 description='ViPR: CLI usage to send alert',
                                 conflict_handler='resolve',
-                                help='Send alert.')
+                                help='Send alert with logs. Event attachments size cannot exceed more than 16 MB compressed size. Please select time window for logs (with help of start, end parameters) during which issue might have occurred.')
 
 
     add_log_args(send_alert_parser, True)
@@ -1554,12 +1495,11 @@ def get_diagnostics_parser(subcommand_parsers, common_parser):
                                 metavar='<node>',
                                 dest='node',
                                 help='Node',
-                                nargs="*",
 				default='')
 
     get_diagnostics_parser.add_argument('-verbose','-v',
                              action='store_true',
-                             help='List storagepools with details',
+                             help='List diagnostics with details',
                              dest='verbose')
 
     get_diagnostics_parser.set_defaults(func=get_diagnostics)
@@ -1773,10 +1713,6 @@ def system_parser(parent_subparser, common_parser):
 
     remove_image_parser(subcommand_parsers, common_parser)
     
-    cluster_list_parser(subcommand_parsers, common_parser)
-    
-    system_status_parser(subcommand_parsers, common_parser)
-
     get_log_level_parser(subcommand_parsers, common_parser)
 
     set_log_level_parser(subcommand_parsers, common_parser)
@@ -1818,3 +1754,7 @@ def system_parser(parent_subparser, common_parser):
     get_properties_metadata_parser(subcommand_parsers, common_parser)
 
     disable_update_check_parser(subcommand_parsers, common_parser)
+    
+    sysmgrcontrolsvc.restart_service_parser(subcommand_parsers, common_parser)
+    sysmgrcontrolsvc.reboot_node_parser(subcommand_parsers, common_parser)
+    sysmgrcontrolsvc.cluster_poweroff_parser(subcommand_parsers, common_parser)

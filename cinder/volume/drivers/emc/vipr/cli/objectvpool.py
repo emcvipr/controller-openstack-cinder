@@ -13,12 +13,12 @@ import common
 
 from common import SOSError
 
-class Objectcos(object):
+class ObjectVpool(object):
     '''
-    The class definition for operations on 'Objectcos'. 
+    The class definition for operations on 'ObjectVpool'. 
     '''
 
-    #Commonly used URIs for the 'objectcos' module
+    #Commonly used URIs for the 'objectvpool' module
 
     URI_SERVICES_BASE               = '' 
     URI_VPOOLS                         = URI_SERVICES_BASE + '/{0}/vpools'
@@ -40,12 +40,12 @@ class Objectcos(object):
         
 
 
-    def objectcos_list(self):
+    def objectvpool_list(self):
         '''
-        Makes a REST API call to retrieve details of a objectcos  based on its UUID
+        Makes a REST API call to retrieve list of objectvpool
         '''
 	(s, h) = common.service_json_request(self.__ipAddr, common.OBJCTRL_PORT, "GET",
-                                             Objectcos.URI_OBJ_VPOOL.format('object'), None)
+                                             ObjectVpool.URI_OBJ_VPOOL.format('object'), None)
 
 	o = common.json_decode(s)
 
@@ -56,22 +56,22 @@ class Objectcos(object):
 
 
 
-    def objectcos_query(self, name):
+    def objectvpool_query(self, name):
 	if (common.is_uri(name)):
             return name
 
-	objcoslst = self.objectcos_list()
+	objcoslst = self.objectvpool_list()
 
 	for cs in objcoslst:
-	    cos_res = self.objectcos_show_by_uri(cs['id'])
-	    if (cos_res['name'] == name):
+	    cos_res = self.objectvpool_show_by_uri(cs['id'])
+	    if ( (cos_res['name'] == name) and (cos_res['inactive'] == False) ):
                 return cos_res['id']
 
         raise SOSError(SOSError.NOT_FOUND_ERR,
-                      "Object Cos query failed: object cos with name "+name+" not found")
+                      "Object Vpool query failed: object vpool with name "+name+" not found")
 
 
-    def objectcos_show_by_uri(self, uri):
+    def objectvpool_show_by_uri(self, uri):
 	(s, h) = common.service_json_request(self.__ipAddr, common.OBJCTRL_PORT, "GET",
                                              self.URI_OBJ_VPOOL_INSTANCE.format('object', uri) , None)
 
@@ -79,23 +79,23 @@ class Objectcos(object):
 	
 	return o
 
-    def objectcos_show(self, name):
-	uri = self.objectcos_query(name)
+    def objectvpool_show(self, name):
+	uri = self.objectvpool_query(name)
 	
-	return  self.objectcos_show_by_uri(uri)
+	return  self.objectvpool_show_by_uri(uri)
 
 
 
-    def objectcos_add(self, name, description ):
+    def objectvpool_add(self, name, description ):
 
 
 
-	objcoslst = self.objectcos_list()
+	objcoslst = self.objectvpool_list()
 
 	for cs in objcoslst:
-	    if(cs['name'] == name):
+	    if( (cs['name'] == name) and (cs['inactive'] == False) ):
                 raise SOSError(SOSError.ENTRY_ALREADY_EXISTS_ERR,
-                            "Objectcos create failed: object cos with same name already exists")
+                            "ObjectVpool create failed: object vpool with same name already exists")
 		
 	parms = dict()
         if (name):
@@ -119,11 +119,11 @@ class Objectcos(object):
 
 
             
-    def objectcos_delete(self, name):
+    def objectvpool_delete(self, name):
         '''
-        Makes a REST API call to delete a objectcos by its UUID
+        Makes a REST API call to delete a objectvpool by its UUID
         '''
-	uri = self.objectcos_query(name)
+	uri = self.objectvpool_query(name)
         (s, h) = common.service_json_request(self.__ipAddr, common.OBJCTRL_PORT, "POST",
                                              self.URI_OBJ_VPOOL_INSTANCE.format('object', uri) + "/deactivate",
                                              None)
@@ -133,13 +133,13 @@ class Objectcos(object):
 
 	
 
-def add_parser(subcommand_parsers, common_parser):
     # add command parser
+def add_parser(subcommand_parsers, common_parser):
     add_parser = subcommand_parsers.add_parser('create',
-                                description='SOS Objectcos Create CLI usage.',
+                                description='SOS ObjectVpool Create CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Create an objectcos')
+                                help='Create an objectvpool')
 
     mandatory_args = add_parser.add_argument_group('mandatory arguments')
 
@@ -150,136 +150,121 @@ def add_parser(subcommand_parsers, common_parser):
                                 required=True)
 
     mandatory_args.add_argument('-description','-desc',
-                                help='description of object cos',
+                                help='description of object vpool',
                                 metavar='<description>',
                                 dest='description',
                                 required=True)
 
-    add_parser.set_defaults(func=objectcos_add)
+    add_parser.set_defaults(func=objectvpool_add)
 
-def objectcos_add(args):
-    obj = Objectcos(args.ip, args.port)
+def objectvpool_add(args):
+    obj = ObjectVpool(args.ip, args.port)
     try:
-        res = obj.objectcos_add(args.name, args.description)
+        res = obj.objectvpool_add(args.name, args.description)
     except SOSError as e:
-        if (e.err_code in [SOSError.NOT_FOUND_ERR, 
-                           SOSError.ENTRY_ALREADY_EXISTS_ERR]):
-            raise SOSError(e.err_code, "Objectcos " + 
-                           args.name + ": Create failed\n" + e.err_text)
-        else:
-            raise e
+        common.format_err_msg_and_raise("add", "object vpool", e.err_text, e.err_code)
 
 
-# NEIGHBORHOOD Delete routines
+# objectvpool Delete routines
 
 def delete_parser(subcommand_parsers, common_parser):
     # delete command parser
     delete_parser = subcommand_parsers.add_parser('delete',
-                                description='SOS Objectcos delete CLI usage.',
+                                description='SOS ObjectVpool delete CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Delete an objectcos')
+                                help='Delete an objectvpool')
 
     mandatory_args = delete_parser.add_argument_group('mandatory arguments')
 
     mandatory_args.add_argument('-name','-n',
-                                help='name of object  cos',
+                                help='name of object vpool',
                                 metavar='<name>',
                                 dest='name',
                                 required=True)
 
-    delete_parser.set_defaults(func=objectcos_delete)
+    delete_parser.set_defaults(func=objectvpool_delete)
 
-def objectcos_delete(args):
-    obj = Objectcos(args.ip, args.port)
+def objectvpool_delete(args):
+    obj = ObjectVpool(args.ip, args.port)
     try:
-        res = obj.objectcos_delete(args.name)
+        res = obj.objectvpool_delete(args.name)
     except SOSError as e:
-        if(e.err_code == SOSError.NOT_FOUND_ERR):
-            raise SOSError(SOSError.NOT_FOUND_ERR, 
-                           "Objectcos delete failed: " + e.err_text)
-        else:
-            raise e
+	common.format_err_msg_and_raise("delete", "object vpool", e.err_text, e.err_code)
 
 
+    # show command parser
 def show_parser(subcommand_parsers, common_parser):
 
-    # delete command parser
     show_parser = subcommand_parsers.add_parser('show',
-                                description='SOS Objectcos show CLI usage.',
+                                description='SOS ObjectVpool show CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='Show an objectcos')
+                                help='Show an objectvpool')
 
     mandatory_args = show_parser.add_argument_group('mandatory arguments')
 
     mandatory_args.add_argument('-name','-n',
-                                help='name of object cos',
+                                help='name of object vpool',
                                 metavar='<name>',
                                 dest='name',
                                 required=True)
 
-    show_parser.set_defaults(func=objectcos_show)
+    show_parser.set_defaults(func=objectvpool_show)
 
-def objectcos_show(args):
-    obj = Objectcos(args.ip, args.port)
+def objectvpool_show(args):
+    obj = ObjectVpool(args.ip, args.port)
     try:
-        res = obj.objectcos_show(args.name)
+        res = obj.objectvpool_show(args.name)
 	return common.format_json_object(res)
     except SOSError as e:
-        if(e.err_code == SOSError.NOT_FOUND_ERR):
-            raise SOSError(SOSError.NOT_FOUND_ERR, 
-                           "Objectcos show failed: " + e.err_text)
-        else:
-            raise e
-# NEIGHBORHOOD Show routines
+	common.format_err_msg_and_raise("show", "object vpool", e.err_text, e.err_code)
 
+
+# list command parser 
 def list_parser(subcommand_parsers, common_parser):
-    # list command parser
     list_parser = subcommand_parsers.add_parser('list',
-                                description='SOS Objectcos List CLI usage.',
+                                description='SOS ObjectVpool List CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
-                                help='List an Objectcos')
+                                help='List an ObjectVpool')
 
-    list_parser.set_defaults(func=objectcos_list)
+    list_parser.set_defaults(func=objectvpool_list)
 
-def objectcos_list(args):
-    obj = Objectcos(args.ip, args.port)
+def objectvpool_list(args):
+    obj = ObjectVpool(args.ip, args.port)
     try:
-        res = obj.objectcos_list()
+        res = obj.objectvpool_list()
 
    	output = []
 
 	for iter in res:
 	    tmp = dict()
-	    tmp['objectcos']=iter['name']
-            output.append(tmp)
+	    tmp['objectvpool']=iter['name']
+	    if(iter['inactive']==False):
+                output.append(tmp)
 	
 	if(res):
 	    from common import TableGenerator
-            TableGenerator(output, [ 'objectcos']).printTable()
+            TableGenerator(output, [ 'objectvpool']).printTable()
 
     except SOSError as e:
-        if(e.err_code == SOSError.NOT_FOUND_ERR):
-            raise SOSError(SOSError.NOT_FOUND_ERR, 
-                           "Objectcos list failed: " + e.err_text)
-        else:
-            raise e
+        common.format_err_msg_and_raise("list", "object vpool", e.err_text, e.err_code)
+
 
 
 
 #
-# Objectcos Main parser routine
+# ObjectVpool Main parser routine
 #
 
-def objectcos_parser(parent_subparser, common_parser):
-    # main objectcos parser
-    parser = parent_subparser.add_parser('objectcos',
-                                        description='SOS Objectcos CLI usage',
+def objectvpool_parser(parent_subparser, common_parser):
+    # main objectvpool parser
+    parser = parent_subparser.add_parser('objectvpool',
+                                        description='SOS ObjectVpool CLI usage',
                                         parents=[common_parser],
                                         conflict_handler='resolve',
-                                        help='Operations on Objectcos')
+                                        help='Operations on ObjectVpool')
     subcommand_parsers = parser.add_subparsers(help='Use One Of Commands')
 
     # add command parser

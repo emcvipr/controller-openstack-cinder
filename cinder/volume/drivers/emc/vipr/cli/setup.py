@@ -42,7 +42,7 @@ distutils.core.setup(
                         'protectionsystem.py',
                         'networksystem.py' ,
 			'objectuser.py',
-			'objectcos.py',
+			'objectvpool.py',
 			'secretkeyuser.py',
             'consistencygroup.py',
             'host.py',
@@ -50,7 +50,8 @@ distutils.core.setup(
             'hostipinterfaces.py',
             'cluster.py',
             'vcenter.py',
-            'vcenterdatacenter.py'
+            'vcenterdatacenter.py',
+            'sysmgrcontrolsvc.py'
 
 			 
 		    ]

@@ -869,5 +869,5 @@ def consistencygroup_parser(parent_subparser, common_parser):
     show_parser(subcommand_parsers, common_parser)
 
     # list command parser
-    snapshot_parser(subcommand_parsers, common_parser)
+    #snapshot_parser(subcommand_parsers, common_parser)
 

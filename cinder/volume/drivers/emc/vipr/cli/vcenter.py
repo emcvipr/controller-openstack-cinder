@@ -93,7 +93,9 @@ class VCenter(object):
     def vcenter_get_details_list(self, detailslst):
         rsltlst= []
         for iter in detailslst:
-            rsltlst.append(self.vcenter_show(iter['id'], None))
+	    tmp = self.vcenter_show(iter['id'], None)
+	    if(tmp):
+                rsltlst.append(tmp)
 
         return rsltlst
 
@@ -234,11 +236,11 @@ class VCenter(object):
         
 
 
-    def vcenter_delete(self, label):
+    def vcenter_delete(self, label, tenantname):
         '''
         Makes a REST API call to delete a vcenter by its UUID
         '''
-        uri = self.vcenter_query(label)
+        uri = self.vcenter_query(label, tenantname)
 
         (s, h) = common.service_json_request(self.__ipAddr, self.__port, "POST", 
 					     self.URI_RESOURCE_DEACTIVATE.format(VCenter.URI_VCENTER.format(uri)),
@@ -344,7 +346,7 @@ def delete_parser(subcommand_parsers, common_parser):
 def vcenter_delete(args):
     obj = VCenter(args.ip, args.port)
     try:
-        res = obj.vcenter_delete(args.name)
+        res = obj.vcenter_delete(args.name, args.tenant)
     except SOSError as e:
         common.format_err_msg_and_raise("delete", "vcenter", e.err_text, e.err_code)
 
@@ -358,7 +360,7 @@ def show_parser(subcommand_parsers, common_parser):
                                 help='Show a vcenter')
 
     mandatory_args = show_parser.add_argument_group('mandatory arguments')
-    show_parser.add_argument('-name', '-n',
+    mandatory_args.add_argument('-name', '-n',
                                 help='name of vcenter',
                                 dest='name',
                                 metavar='<vcentername>',
@@ -382,6 +384,11 @@ def vcenter_show(args):
     obj = VCenter(args.ip, args.port)
     try:
         res = obj.vcenter_show(args.name, args.tenant, args.xml)
+
+	if(res is None):
+            raise SOSError(SOSError.NOT_FOUND_ERR,
+                       "vcenter " + args.name + ": not found")
+
 	if(args.xml):
             return common.format_xml(res)
 
