@@ -115,7 +115,7 @@ class Openstack(object):
                 ostype = "Linux"
             
                 # host not found, create a new one.
-            task_rep = self._host.create(hostname, ostype, hostname, tenant, project, None, None, None, None, None, None, None, None)
+            task_rep = self._host.create(hostname, ostype, hostname, tenant, None, None, None, None, None, None, None, None, None)
             host = common.show_by_href(self.__ipAddr, self.__port, task_rep['resource']) 
         return host                
     

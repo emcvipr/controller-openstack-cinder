@@ -300,7 +300,7 @@ class EMCViPRDriverCommon():
                 if (foundhostname is None):
                     if (not self._host_exists(hostname)):
                         # create a host so it can be added to the export group
-                        self.host_obj.create(hostname, platform.system(), hostname, self.configuration.vipr_tenant, self.configuration.vipr_project, None, None, None, None, None, None, None, None)
+                        self.host_obj.create(hostname, platform.system(), hostname, self.configuration.vipr_tenant, None, None, None, None, None, None, None, None, None)
                         LOG.info("Created host " + hostname)
                     # add the initiator to the host
                     self.hostinitiator_obj.create(hostname, protocol, initiatorNode, initiatorPort);
@@ -448,7 +448,7 @@ class EMCViPRDriverCommon():
     def _find_host(self, initiator_port):
         ''' Find the host, if exists, to which the given initiator belong. '''
         foundhostname = None
-        hosts = self.host_obj.list_all(self.configuration.vipr_tenant, self.configuration.vipr_project)
+        hosts = self.host_obj.list_by_tenant(self.configuration.vipr_tenant)
         hostsdetails = self.host_obj.show(hosts)
         for host in hostsdetails:
             initiators = self.host_obj.list_initiators(host['name'])
@@ -465,7 +465,7 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def _host_exists(self, host_name):
         ''' Check if a Host object with the given hostname already exists in ViPR '''
-        hosts = self.host_obj.list_all(self.configuration.vipr_tenant, self.configuration.vipr_project)
+        hosts = self.host_obj.list_by_tenant(self.configuration.vipr_tenant)
         hostsdetails = self.host_obj.show(hosts)
         for host in hostsdetails:
             if (host_name == host['name']):
