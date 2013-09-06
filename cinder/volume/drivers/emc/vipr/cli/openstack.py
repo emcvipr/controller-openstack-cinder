@@ -353,7 +353,7 @@ def add_host(args):
     vipr_param['varray'] = args.varray if args.varray else viprinfo['varray']
     vipr_param['network'] = args.network
     vipr_param['port'] = args.port if args.port else viprinfo['port']
-    vipr_param['hostname'] = args.ip if args.ip else viprinfo['FQDN'] 
+    vipr_param['hostname'] = args.ip if args.ip else viprinfo['hostname'] 
     vipr_param['tenant'] = viprinfo['tenant']
     vipr_param['project'] = viprinfo['project']  
     obj.get_logger().info('ViPR parameters: %s', vipr_param)
