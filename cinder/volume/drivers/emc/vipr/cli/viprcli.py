@@ -33,10 +33,8 @@ import virtualarray
 import storageport
 import exportgroup
 import network
-import sysmanager
 import vcenter
 import vcenterdatacenter
-import secretkeyuser
 import protectionsystem
 import consistencygroup
 import host
@@ -122,11 +120,9 @@ cluster.cluster_parser(module_parsers, common_parser)
 virtualarray.varray_parser(module_parsers, common_parser)
 storageport.storageport_parser(module_parsers, common_parser)
 exportgroup.exportgroup_parser(module_parsers, common_parser)
-sysmanager.system_parser(module_parsers, common_parser)
 protectionsystem.protectionsystem_parser(module_parsers, common_parser)
 vcenter.vcenter_parser(module_parsers, common_parser)
 vcenterdatacenter.vcenterdatacenter_parser(module_parsers, common_parser)
-secretkeyuser.secretkeyuser_parser(module_parsers, common_parser)
 network.network_parser(module_parsers, common_parser)
 host.host_parser(module_parsers, common_parser)
 cluster.cluster_parser(module_parsers, common_parser)
