@@ -20,6 +20,7 @@ import sys
 import socket
 import base64
 import requests
+from requests import sessions
 from requests.exceptions import SSLError
 from requests.exceptions import ConnectionError
 from requests.exceptions import TooManyRedirects
@@ -36,6 +37,7 @@ PROD_NAME = 'storageos'
 TENANT_PROVIDER = 'urn:vipr:TenantOrg:provider:'
 
 SWIFT_AUTH_TOKEN = 'X-Auth-Token'
+SESSION = None
 
 TIMEOUT_SEC = 20 # 20 SECONDS
 OBJCTRL_INSECURE_PORT           = '9010'
@@ -123,6 +125,7 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
     Throws: SOSError in case of HTTP errors with err_code 3
     '''
     global COOKIE
+    global SESSION
 
     SEC_AUTHTOKEN_HEADER   = 'X-SDS-AUTH-TOKEN'
 
@@ -195,16 +198,17 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
         else:
             raise SOSError(SOSError.NOT_FOUND_ERR, cookiefile + " : Cookie file not found")
             
-        headers[SEC_AUTHTOKEN_HEADER] = token    
+        headers[SEC_AUTHTOKEN_HEADER] = token
+        SESSION = SESSION or requests.Session()
         if (http_method == 'GET'):
 	    '''when the GET request is specified with a filename, we write the contents of the GET
 	       request to the filename. This option generally is used when the contents to be returned
 	       are large. So, rather than getting all the data at once we Use prefetch=False for the purpose
 	       of streaming. Prefetch = False means we can stream data'''
 	    if(filename):
-                response = requests.get(url, prefetch=False, headers=headers, verify=False, cookies=cookiejar)
+                response = SESSION.get(url, prefetch=False, headers=headers, verify=False, cookies=cookiejar)
 	    else:
-                response = requests.get(url, headers=headers, verify=False, cookies=cookiejar)
+                response = SESSION.get(url, headers=headers, verify=False, cookies=cookiejar)
             
 	    if(filename):
                 try:
@@ -219,11 +223,11 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
                     raise SOSError(e.errno, e.strerror)
 
         elif (http_method == 'POST'):
-            response = requests.post(url, data=body, headers=headers, verify=False, cookies=cookiejar)
+            response = SESSION.post(url, data=body, headers=headers, verify=False, cookies=cookiejar)
         elif (http_method == 'PUT'):
-            response = requests.put(url, data=body, headers=headers, verify=False, cookies=cookiejar)
+            response = SESSION.put(url, data=body, headers=headers, verify=False, cookies=cookiejar)
         elif (http_method == 'DELETE'):
-            response = requests.delete(url, headers=headers, verify=False, cookies=cookiejar)
+            response = SESSION.delete(url, headers=headers, verify=False, cookies=cookiejar)
         else:
             raise SOSError(SOSError.HTTP_ERR, "Unknown/Unsupported HTTP method: " + http_method)
     
