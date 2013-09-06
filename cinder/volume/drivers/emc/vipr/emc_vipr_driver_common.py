@@ -41,9 +41,33 @@ import sys,os,traceback
 
 LOG = logging.getLogger(__name__)
 
-CONF = cfg.CONF
+volume_opts = [
+    cfg.StrOpt('vipr_hostname',
+               default=None,
+               help='Hostname for the EMC ViPR Instance'),
+    cfg.IntOpt('vipr_port',
+               default=4443,
+               help='Port for the EMC ViPR Instance'),
+    cfg.StrOpt('vipr_username',
+               default=None,
+               help='Username for accessing the EMC ViPR Instance'),
+    cfg.StrOpt('vipr_password',
+               default=None,
+               help='Password for accessing the EMC ViPR Instance'),
+    cfg.StrOpt('vipr_tenant',
+               default=None,
+               help='Tenant to utilize within the EMC ViPR Instance'),   
+    cfg.StrOpt('vipr_project',
+               default=None,
+               help='Project to utilize within the EMC ViPR Instance'),                 
+    cfg.StrOpt('vipr_varray',
+               default=None,
+               help='Virtual Array to utilize within the EMC ViPR Instance')                  
+    ]
 
-CINDER_EMC_VIPR_CONFIG_FILE = '/etc/cinder/cinder_emc_vipr_config.xml'
+CONF=cfg.CONF
+CONF.register_opts(volume_opts)
+
 URI_VPOOL_VARRAY_CAPACITY = '/block/vpools/{0}/varrays/{1}/capacity'
 
 
@@ -90,6 +114,7 @@ class EMCViPRDriverCommon():
     def __init__(self, prtcl, configuration=None):
         self.protocol = prtcl
         self.configuration = configuration
+        self.configuration.append_config_values(volume_opts)
         vipr_utils.COOKIE = None
         
         # instantiate a few vipr cli objects for later use
@@ -98,6 +123,40 @@ class EMCViPRDriverCommon():
         self.host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.hostinitiator_obj = HostInitiator(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.varray_obj = VirtualArray(self.configuration.vipr_hostname, self.configuration.vipr_port)
+
+    def check_for_setup_error(self):
+        # validate all of the vipr_* configuration values        
+        if (self.configuration.vipr_hostname is None):
+            message="vipr_hostname is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)
+        
+        if (self.configuration.vipr_port is None):
+            message="vipr_port is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)
+                  
+        if (self.configuration.vipr_username is None):
+            message="vipr_username is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message) 
+           
+        if (self.configuration.vipr_password is None):
+            message="vipr_password is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)  
+           
+        if (self.configuration.vipr_tenant is None):
+            message="vipr_tenant is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)  
+            
+        if (self.configuration.vipr_project is None):
+            message="vipr_project is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)  
+            
+        if (self.configuration.vipr_varray is None):
+            message="vipr_varray is not set in cinder configuration"
+            raise exception.VolumeBackendAPIException(data=message)
+                                
+        # check the rpc_response_timeout value, should be greater than 300 
+        if (self.configuration.rpc_response_timeout<300):
+            LOG.warn(_("cinder configuration should set rpc_response_time to at least 300 seconds"))
 
     def authenticate_user(self):       
         global AUTHENTICATED
