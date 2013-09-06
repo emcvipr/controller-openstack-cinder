@@ -34,6 +34,7 @@ from cli.snapshot import Snapshot
 from cli.volume import Volume
 from cli.host import Host
 from cli.hostinitiators import HostInitiator
+from cli.virtualarray import VirtualArray
 
 # for the delegator
 import sys,os,traceback
@@ -96,6 +97,7 @@ class EMCViPRDriverCommon():
         self.exportgroup_obj = ExportGroup(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.hostinitiator_obj = HostInitiator(self.configuration.vipr_hostname, self.configuration.vipr_port)
+        self.varray_obj = VirtualArray(self.configuration.vipr_hostname, self.configuration.vipr_port)
 
     def authenticate_user(self):       
         global AUTHENTICATED
@@ -443,7 +445,16 @@ class EMCViPRDriverCommon():
                     break
 
             if foundgroupname is not None:
-                break
+                # Check the associated varray
+                if groupdetails['varray']:
+                    varray_uri = groupdetails['varray']['id']
+                    varray_details = self.varray_obj.varray_show(varray_uri)
+                    if (varray_details['name'] == self.configuration.vipr_varray):
+                        LOG.debug("Found exportgroup " + foundgroupname + " for initiator " + initiator_port)
+                        break
+                    
+                # Not the right varray
+                foundgroupname = None
 
         return foundgroupname
 
