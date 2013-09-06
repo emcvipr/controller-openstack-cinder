@@ -370,9 +370,9 @@ class EMCViPRDriverCommon():
                 foundgroupname = hostname + 'SG'
                 # create a unique name
                 foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
-                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname, None, None,None, True);
+                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname);
 
-            res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_tenant, self.configuration.vipr_project, volumename)
+            res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_tenant, self.configuration.vipr_project, volumename, None, None,None, True)
             return self._find_device_info(volume, initiatorPort)
 
         except SOSError as e:
