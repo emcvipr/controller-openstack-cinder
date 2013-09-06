@@ -416,14 +416,14 @@ class ExportGroup(object):
                 if(out["state"] == "ready"):
                    break
 
-                # if the status of the task is 'error' then cancel the timer and raise exception
+                # if the status of the task is 'error' then raise exception
                 if(out["state"] == "error"):
                     
                     raise SOSError(SOSError.VALUE_ERR, "Task: "+ task_id + " is in ERROR state")
 
             
-        # sleep for a second
-        time.sleep(1)
+            # sleep for a second
+            time.sleep(1)
         
         return
     
