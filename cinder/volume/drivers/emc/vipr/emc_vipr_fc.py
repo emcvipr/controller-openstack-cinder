@@ -121,10 +121,11 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         initiatorPort = connector['initiator']
         protocol = 'FC'
         hostname = connector['host'] # socket.gethostname()        
-        self.common.initialize_connection(volume,
+        itl = self.common.initialize_connection(volume,
             protocol, initiatorNode, initiatorPort, hostname)
 
-        properties = dict() # self._get_iscsi_properties(volume)
+        ''' TODO: construct the properties '''
+        properties = dict()
         return {
             'driver_volume_type': 'fibre_channel',
             'data': properties

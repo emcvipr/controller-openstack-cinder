@@ -100,7 +100,24 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """Initializes the connection and returns connection info.
 
         the iscsi driver returns a driver_volume_type of 'iscsi'.
-        the format of the driver data is defined in _get_iscsi_properties.
+        the format of the driver data is defined as:
+    
+            :target_discovered:    boolean indicating whether discovery was used
+    
+            :target_iqn:    the IQN of the iSCSI target
+    
+            :target_portal:    the portal of the iSCSI target
+    
+            :target_lun:    the lun of the iSCSI target
+    
+            :volume_id:    the id of the volume (currently used by xen)
+    
+            :auth_method:, :auth_username:, :auth_password:
+    
+                the authentication details. Right now, either auth_method is not
+                present meaning no authentication, or auth_method == `CHAP`
+                meaning use CHAP with the specified credentials.
+
         Example return value::
 
             {
@@ -118,106 +135,16 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         initiatorPort = connector['initiator']
         protocol = 'iSCSI'
         hostname = connector['host']
-        device_info = self.common.initialize_connection(volume,
+        itl = self.common.initialize_connection(volume,
             protocol, initiatorNode, initiatorPort, hostname)
-
-        iscsi_properties = self._get_iscsi_properties(volume, device_info)
-        return {
-            'driver_volume_type': 'iscsi',
-            'data': iscsi_properties
-        }
-
-    def _do_iscsi_discovery(self, volume, ip_address=None):
-
-        LOG.warn(_("ISCSI provider_location not stored, using discovery"))
-
-        if ip_address is None:
-            (out, _err) = self._execute('iscsiadm', '-m', 'discovery',
-                                    '-t', 'sendtargets', '-p',
-                                    self.configuration.iscsi_ip_address,
-                                    run_as_root=True)
-        else:
-            (out, _err) = self._execute('iscsiadm', '-m', 'discovery',
-                                    '-t', 'sendtargets', '-p',
-                                    ip_address,
-                                    run_as_root=True)
-
-        targets = []
-        for target in out.splitlines():
-            targets.append(target)
-
-        return targets 
-
-    def _get_iscsi_properties(self, volume, device_info, discover_iscsi=False):
-        """Gets iscsi configuration
-
-        We ideally get saved information in the volume entity, but fall back
-        to discovery if need be. Discovery may be completely removed in future
-        The properties are:
-
-        :target_discovered:    boolean indicating whether discovery was used
-
-        :target_iqn:    the IQN of the iSCSI target
-
-        :target_portal:    the portal of the iSCSI target
-
-        :target_lun:    the lun of the iSCSI target
-
-        :volume_id:    the id of the volume (currently used by xen)
-
-        :auth_method:, :auth_username:, :auth_password:
-
-            the authentication details. Right now, either auth_method is not
-            present meaning no authentication, or auth_method == `CHAP`
-            meaning use CHAP with the specified credentials.
-        """
-
- 
-        try:
-            if device_info['hostlunid'] is None:
-                exception_message = (_("Cannot find device number for volume %s")
-                                 % volume['name'])
-        except KeyError:
-            raise exception.VolumeBackendAPIException(data=exception_message)
-
+        
         properties = {}
-        ip_address = device_info['ip_address']
-        device_number = device_info['hostlunid']
-        endpoint = device_info['endpoint']
-        tcp_port = device_info['tcp_port']
-
-        if (discover_iscsi):
-            location = self._do_iscsi_discovery(volume, ip_address)
-            if not location:
-                raise exception.InvalidVolume(_("Could not find iSCSI export "
-                                                " for volume %s") %
-                                              (volume['name']))
-
-            LOG.debug(_("ISCSI Discovery: Found %s") % (location))
-            properties['target_discovered'] = True
-            
-            foundEndpoint = False
-            for loc in location:
-                results = loc.split(" ")
-                target_portal = results[0].split(",")[0]
-                target_iqn = results[1]
-                if target_iqn == endpoint:
-                    LOG.debug(_("Found iSCSI endpoint: %s") % endpoint)
-                    foundEndpoint = True
-                    break
-
-            if not foundEndpoint:
-                LOG.warn(_("ISCSI endpoint not found for volume %(name)s.")
-                         % {'name': volume['name']})            
-        else:
-            properties['target_discovered'] = False
-            target_portal = ip_address + ':' + tcp_port
-            target_iqn = endpoint
-            
-        properties['target_iqn'] = target_iqn
-        properties['target_portal'] = target_portal
-        properties['target_lun'] = device_number
+        properties['target_discovered'] = False
+        properties['target_iqn'] = itl['target']['port']
+        properties['target_portal'] = itl['target']['ip_address'] + ':' + itl['target']['tcp_port']
+        properties['target_lun'] = itl['hlu']
         properties['volume_id'] = volume['id']
+        
         auth = volume['provider_auth']
         if auth:
             (auth_method, auth_username, auth_secret) = auth.split()
@@ -226,19 +153,10 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             properties['auth_password'] = auth_secret
 
         LOG.debug(_("ISCSI properties: %s") % (properties))
-
-        return properties
-
-    def _run_iscsiadm(self, iscsi_properties, iscsi_command, **kwargs):
-        check_exit_code = kwargs.pop('check_exit_code', 0)
-        (out, err) = self._execute('iscsiadm', '-m', 'node', '-T',
-                                   iscsi_properties['target_iqn'],
-                                   '-p', iscsi_properties['target_portal'],
-                                   *iscsi_command, run_as_root=True,
-                                   check_exit_code=check_exit_code)
-        LOG.debug("iscsiadm %s: stdout=%s stderr=%s" %
-                  (iscsi_command, out, err))
-        return (out, err)
+        return {
+            'driver_volume_type': 'iscsi',
+            'data': properties
+        }
 
     def terminate_connection(self, volume, connector, **kwargs):
         """Disallow connection from connector"""

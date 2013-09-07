@@ -393,83 +393,54 @@ class EMCViPRDriverCommon():
             else:
                 LOG.info("No export group found for this initiator: " + initiatorPort + "; this is considered already detached.")
                 
-            while (True):
-                try:
-                    exports = self.volume_obj.get_exports_by_uri(volid)
-                except SOSError as e:
-                    '''
-                    Working around a ViPR issue that the /exports may be unavailable
-                    for a short period of time right after the volume is unexported
-                    '''
-                    LOG.warn("Waiting for the volume " + volumename + " to be detached.")
-                    time.sleep(10)
-                    continue
-                
-                found = False
-                for itl in exports['itl']:
-                    if (str(initiatorPort) == itl['initiator']['port']):
-                        found = True
-                        time.sleep(10)
-                    break
-                
-                if found is False:
-                    # job is done as the initiator is no longer in the /export
-                    break
-                
         except SOSError as e:
             raise SOSError(SOSError.SOS_FAILURE_ERR, "Detaching volume " + volumename + " from host " + hostname + " failed: " + e.err_text)
 
     @retry_wrapper
-    def _find_device_info(self, volume, initiatorPort):
-        device_info = {} 
-        try:
-            volumename = self._get_volume_name(volume)
-            fullname = self.configuration.vipr_project + '/' + volumename
-            vol_uri = self.volume_obj.volume_query(fullname)
-            while (True):
-                exports = self.volume_obj.get_exports_by_uri(vol_uri)
-                LOG.debug(_("Volume exports: %s") % exports)
-                """
-                exports['itl'][0]
-
+    def _find_device_info(self, volume, initiator_port):
+        '''
+        Returns the device_info in itl format:
                 {'device_wwn': 
                 '60:06:01:60:3A:70:32:00:C8:06:BF:10:88:86:E2:11', 
                 'hlu': '000022',
                 'initiator': 'iqn.1993-08.org.debian:01:56aafff0227d', 
                 'target': 'iqn.1992-04.com.emc:cx.apm00123907237.a8'}
-                """
-                for itl in exports['itl']:
-                    if (str(initiatorPort) == itl['initiator']['port']):
-                        found_device_number = itl['hlu']
+        '''
+        volumename = self._get_volume_name(volume)
+        fullname = self.configuration.vipr_project + '/' + volumename
+        vol_uri = self.volume_obj.volume_query(fullname)
+        
+        '''
+        The itl info shall be available at the first try since now export is a 
+        synchronous call.  We are trying a few more times to accommodate any 
+        delay on filling in the itl info after the export task is completed.
+        '''
+        for x in xrange(10):
+            exports = self.volume_obj.get_exports_by_uri(vol_uri)
+            LOG.debug(_("Volume exports: %s") % exports)
+            for itl in exports['itl']:
+                if (str(initiator_port) == itl['initiator']['port']):
+                    found_device_number = itl['hlu']
+                    if found_device_number is not None and found_device_number != '-1':
                         # 0 is a valid number for found_device_number.
                         # Only loop if it is None or -1
-                        if (found_device_number is not None and found_device_number != '-1'):
-                            LOG.debug(_("Found Device Number: %(found_device_number)s") % (locals()))
-                            device_info['hostlunid'] = found_device_number
-                            device_info['endpoint'] = itl['target']['port']
-                            device_info['ip_address'] = itl['target']['ip_address']
-                            device_info['tcp_port'] = itl['target']['tcp_port']
-
-                            break
+                        LOG.debug(_("Found Device Number: %(found_device_number)s") % (locals()))
+                        return itl
                 
-                if (device_info):
-                    break
-                else:
-                    LOG.debug(_("Device Number not found. Retrying..."))
-                    time.sleep(10)
-
-        except:
-            pass
-
-        return device_info
-
+            LOG.debug(_("Device Number not found yet. Retrying after 10 seconds..."))
+            time.sleep(10)
+            
+        # No device number found after 10 tries; return an empty itl
+        LOG.info(_("No device number has been found; this likely indicates an unsuccessful attach of volume %(volumename) to initiator %(initiatorPort).") % (locals()))
+        return {}
+    
     def _get_volume_name(self, vol):
         try:
             name = vol['display_name']
         except:
             name = None
              
-        if ( name is None or len(name) == 0):
+        if (name is None or len(name) == 0):
             name = vol['name']
             
         return name
