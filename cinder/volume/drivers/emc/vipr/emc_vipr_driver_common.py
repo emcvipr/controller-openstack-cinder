@@ -103,14 +103,6 @@ class EMCViPRDriverCommon():
     
     OPENSTACK_TAG = 'OpenStack'
 
-    stats = {'driver_version': '1.0',
-             'free_capacity_gb': 'unknown',
-             'reserved_percentage': '0',
-             'storage_protocol': 'iSCSI',
-             'total_capacity_gb': 'unknown',
-             'vendor_name': 'EMC',
-             'volume_backend_name': 'EMCViPRISCSIDriver'}
-             
     def __init__(self, prtcl, configuration=None):
         self.protocol = prtcl
         self.configuration = configuration
@@ -123,6 +115,13 @@ class EMCViPRDriverCommon():
         self.host_obj = Host(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.hostinitiator_obj = HostInitiator(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.varray_obj = VirtualArray(self.configuration.vipr_hostname, self.configuration.vipr_port)
+        
+        self.stats = {'driver_version': '1.0',
+                 'free_capacity_gb': 'unknown',
+                 'reserved_percentage': '0',
+                 'storage_protocol': prtcl,
+                 'total_capacity_gb': 'unknown',
+                 'vendor_name': 'EMC'}
 
     def check_for_setup_error(self):
         # validate all of the vipr_* configuration values        
