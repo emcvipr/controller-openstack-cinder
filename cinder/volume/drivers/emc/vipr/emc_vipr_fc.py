@@ -110,6 +110,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
              {
                 'driver_volume_type': 'fibre_channel'
                 'data': {
+                    'volume_id': 1,
                     'target_discovered': True,
                     'target_lun': 1,
                     'target_wwn': ['1234567890123', '0987654321321'],
@@ -121,11 +122,26 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         initiatorPort = connector['initiator']
         protocol = 'FC'
         hostname = connector['host'] # socket.gethostname()        
-        itl = self.common.initialize_connection(volume,
+        itls = self.common.initialize_connection(volume,
             protocol, initiatorNode, initiatorPort, hostname)
 
-        ''' TODO: construct the properties '''
-        properties = dict()
+        properties = {}
+        properties['volume_id'] = volume['id']
+        properties['target_discovered'] = False
+        if itls:
+            properties['target_lun'] = itls[0]['hlu']
+            properties['target_wwn'] = []
+            for itl in itls:
+                properties['target_wwn'].append(itl['target']['port'])
+        
+        auth = volume['provider_auth']
+        if auth:
+            (auth_method, auth_username, auth_secret) = auth.split()
+            properties['auth_method'] = auth_method
+            properties['auth_username'] = auth_username
+            properties['auth_password'] = auth_secret
+
+        LOG.debug(_("FC properties: %s") % (properties))
         return {
             'driver_volume_type': 'fibre_channel',
             'data': properties

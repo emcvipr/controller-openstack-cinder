@@ -399,12 +399,26 @@ class EMCViPRDriverCommon():
     @retry_wrapper
     def _find_device_info(self, volume, initiator_port):
         '''
-        Returns the device_info in itl format:
-                {'device_wwn': 
-                '60:06:01:60:3A:70:32:00:C8:06:BF:10:88:86:E2:11', 
-                'hlu': '000022',
-                'initiator': 'iqn.1993-08.org.debian:01:56aafff0227d', 
-                'target': 'iqn.1992-04.com.emc:cx.apm00123907237.a8'}
+        Returns the device_info in a list of itls that have the matched initiator
+        (there could be multiple targets, hence a list):
+                [
+                 {
+                  "hlu":9,
+                  "initiator":{...,"port":"20:00:00:25:B5:49:00:22"},
+                  "export":{...},
+                  "device":{...,"wwn":"600601602B802D00B62236585D0BE311"},
+                  "target":{...,"port":"50:06:01:6A:46:E0:72:EF"},
+                  "san_zone_name":"..."
+                 },
+                 {
+                  "hlu":9,
+                  "initiator":{...,"port":"20:00:00:25:B5:49:00:22"},
+                  "export":{...},
+                  "device":{...,"wwn":"600601602B802D00B62236585D0BE311"},
+                  "target":{...,"port":"50:06:01:62:46:E0:72:EF"},
+                  "san_zone_name":"..."
+                 }
+                ]
         '''
         volumename = self._get_volume_name(volume)
         fullname = self.configuration.vipr_project + '/' + volumename
@@ -415,6 +429,7 @@ class EMCViPRDriverCommon():
         synchronous call.  We are trying a few more times to accommodate any 
         delay on filling in the itl info after the export task is completed.
         '''
+        itls = []
         for x in xrange(10):
             exports = self.volume_obj.get_exports_by_uri(vol_uri)
             LOG.debug(_("Volume exports: %s") % exports)
@@ -425,14 +440,19 @@ class EMCViPRDriverCommon():
                         # 0 is a valid number for found_device_number.
                         # Only loop if it is None or -1
                         LOG.debug(_("Found Device Number: %(found_device_number)s") % (locals()))
-                        return itl
-                
-            LOG.debug(_("Device Number not found yet. Retrying after 10 seconds..."))
-            time.sleep(10)
+                        itls.append(itl)
             
-        # No device number found after 10 tries; return an empty itl
-        LOG.info(_("No device number has been found; this likely indicates an unsuccessful attach of volume %(volumename) to initiator %(initiatorPort).") % (locals()))
-        return {}
+            if (itls):
+                break
+            else:
+                LOG.debug(_("Device Number not found yet. Retrying after 10 seconds..."))
+                time.sleep(10)
+            
+        if itls is None:
+            # No device number found after 10 tries; return an empty itl
+            LOG.info(_("No device number has been found after 10 tries; this likely indicates an unsuccessful attach of volume %(volumename) to initiator %(initiatorPort).") % (locals()))
+            
+        return itls
     
     def _get_volume_name(self, vol):
         try:
