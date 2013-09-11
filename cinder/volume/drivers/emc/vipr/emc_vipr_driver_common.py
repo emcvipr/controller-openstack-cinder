@@ -442,7 +442,7 @@ class EMCViPRDriverCommon():
                         LOG.debug(_("Found Device Number: %(found_device_number)s") % (locals()))
                         itls.append(itl)
             
-            if (itls):
+            if itls:
                 break
             else:
                 LOG.debug(_("Device Number not found yet. Retrying after 10 seconds..."))
