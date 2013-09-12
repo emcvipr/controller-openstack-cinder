@@ -124,21 +124,21 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
             }
 
         """
+        properties = {}
+        properties['volume_id'] = volume['id']
+        properties['target_discovered'] = False
+        properties['target_wwn'] = []
+
         protocol = 'FC'
         hostname = connector['host']
         for i in xrange(len(connector['wwpns'])):
             initiatorNode = ':'.join(re.findall('..', connector['wwnns'][i])).upper()   # Add ":" every two digits
             initiatorPort = ':'.join(re.findall('..', connector['wwpns'][i])).upper()   # Add ":" every two digits
             itls = self.common.initialize_connection(volume, protocol, initiatorNode, initiatorPort, hostname)
-
-        properties = {}
-        properties['volume_id'] = volume['id']
-        properties['target_discovered'] = False
-        if itls:
-            properties['target_lun'] = itls[0]['hlu']
-            properties['target_wwn'] = []
-            for itl in itls:
-                properties['target_wwn'].append(itl['target']['port'].replace(':','').lower())
+            if itls:
+                properties['target_lun'] = itls[0]['hlu']
+                for itl in itls:
+                    properties['target_wwn'].append(itl['target']['port'].replace(':','').lower())
         
         auth = volume['provider_auth']
         if auth:
