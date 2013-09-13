@@ -481,29 +481,29 @@ class EMCViPRDriverCommon():
     def _find_exportgroup(self, initiator_port):
         '''
         Find the export group to which the given initiator port belong, if exists.
-        Question: can an initiator be part of two groups?
         '''
         foundgroupname = None
         grouplist = self.exportgroup_obj.exportgroup_list(self.configuration.vipr_project, self.configuration.vipr_tenant)
         for groupid in grouplist:
             groupdetails = self.exportgroup_obj.exportgroup_show(groupid, self.configuration.vipr_project, self.configuration.vipr_tenant)
-            initiators = groupdetails['initiators']
-            for initiator in initiators:
-                if (initiator['initiator_port'] == initiator_port):
-                    foundgroupname = groupdetails['name']
-                    break
-
-            if foundgroupname is not None:
-                # Check the associated varray
-                if groupdetails['varray']:
-                    varray_uri = groupdetails['varray']['id']
-                    varray_details = self.varray_obj.varray_show(varray_uri)
-                    if (varray_details['name'] == self.configuration.vipr_varray):
-                        LOG.debug("Found exportgroup " + foundgroupname + " for initiator " + initiator_port)
+            if groupdetails is not None:
+                initiators = groupdetails['initiators']
+                for initiator in initiators:
+                    if (initiator['initiator_port'] == initiator_port):
+                        foundgroupname = groupdetails['name']
                         break
+
+                if foundgroupname is not None:
+                    # Check the associated varray
+                    if groupdetails['varray']:
+                        varray_uri = groupdetails['varray']['id']
+                        varray_details = self.varray_obj.varray_show(varray_uri)
+                        if (varray_details['name'] == self.configuration.vipr_varray):
+                            LOG.debug("Found exportgroup " + foundgroupname + " for initiator " + initiator_port)
+                            break
                     
-                # Not the right varray
-                foundgroupname = None
+                    # Not the right varray
+                    foundgroupname = None
 
         return foundgroupname
 
