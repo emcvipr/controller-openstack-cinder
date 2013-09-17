@@ -629,7 +629,7 @@ def exportgroup_list(args):
                             if(vol):
                                 volnames.append(vol['name'])
                         elif(strvol.find('urn:storageos:BlockSnapshot')>= 0):
-                            snapshot = snapobj.snapshot_show_uri('block', strvol)
+                            snapshot = snapobj.snapshot_show_uri('block', None, strvol)
                             if(snapshot):
                                 volnames.append(snapshot['name'])
                     eg['volumes_snapshots']=volnames

@@ -892,7 +892,8 @@ def delete_auth_provider_parser(subcommand_parsers, common_parser):
     mandatory_args.add_argument('-name',
                                 metavar='<name>',
                                 help='name of the authentication provider',
-                                dest='name')
+                                dest='name',
+                                required=True)
 
     delete_auth_provider_parser.set_defaults(func=delete_authentication_provider)
 
@@ -1010,7 +1011,7 @@ def delete_role_parser(subcommand_parsers, common_parser):
 
     mandatory_args.add_argument('-role',
                                  metavar='<role>',
-                                help='role to be added',
+                                help='role to be deleted',
                                 dest='role',
                                 required=True,
 				choices=Authentication.ZONE_ROLES)

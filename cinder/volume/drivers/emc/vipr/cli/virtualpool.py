@@ -615,10 +615,11 @@ def create_parser(subcommand_parsers, common_parser):
                 metavar='<varrays>',
                 dest='varrays',
                 nargs='+' )
-    create_parser.add_argument('-multipaths','-mp',
+    mandatory_args.add_argument('-multipaths','-mp',
                 help='Multipaths',
                 metavar='<multipaths>',
-                dest='multipaths')
+                dest='multipaths',
+                required=True)
     create_parser.add_argument('-maxsnapshots','-msnp',
                 help='Maximum number of native snapshots',
                 metavar='<max_snapshots>',

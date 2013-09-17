@@ -1371,7 +1371,7 @@ def get_tenant_vcenters(args):
 def create_namespace_parser(subcommand_parsers, common_parser):
     # role  command parser
     create_namespace_parser = subcommand_parsers.add_parser('create',
-                                description='ViPR Create Namespace CLI usage.',
+                                description='ViPR Namespace Create CLI usage.',
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='create a namespace')

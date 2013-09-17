@@ -389,7 +389,8 @@ def list_parser(subcommand_parsers, common_parser):
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Lists initiators')
-    list_parser.add_argument('-hl', '-hostlabel',
+    mandatory_args = list_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-hl', '-hostlabel',
                                dest='hostlabel',
                                metavar='<hostlabel>',
                                help='Host for which initiators to be listed',

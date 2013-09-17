@@ -495,7 +495,7 @@ def update_acl_parser(subcommand_parsers, common_parser):
                                 help='operation to be performed',
                                 required=True)
     mandatory_args.add_argument('-pe', '-privilege',
-                                choices=["all", "backup", "own"],
+                                choices=["all", "backup"],
                                 dest='privilege',
                                 help='privilege',
                                 required=True)

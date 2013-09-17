@@ -223,7 +223,11 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
                     raise SOSError(e.errno, e.strerror)
 
         elif (http_method == 'POST'):
-            response = SESSION.post(url, data=body, headers=headers, verify=False, cookies=cookiejar)
+            if(filename):
+                with open(filename) as f:
+                    response = requests.post(url, data=f, headers=headers, verify=False, cookies=cookiejar)
+            else:
+                response = requests.post(url, data=body, headers=headers, verify=False, cookies=cookiejar)
         elif (http_method == 'PUT'):
             response = SESSION.put(url, data=body, headers=headers, verify=False, cookies=cookiejar)
         elif (http_method == 'DELETE'):

@@ -210,7 +210,7 @@ class Fileshare(object):
 
         from virtualpool import VirtualPool
         vpool_obj = VirtualPool(self.__ipAddr, self.__port)
-        vpool_uri = vpool_obj.vpool_query(vpool, "block")
+        vpool_uri = vpool_obj.vpool_query(vpool, "file")
 
         from virtualarray import VirtualArray
         varray_obj = VirtualArray(self.__ipAddr, self.__port)

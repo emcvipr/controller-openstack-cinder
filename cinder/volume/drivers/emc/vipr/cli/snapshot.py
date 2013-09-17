@@ -174,7 +174,7 @@ class Snapshot(object):
         Returns:
             Snapshot details in JSON response payload 
         '''
-        if(resourceUri.find('BlockConsistencyGroup') > 0):
+        if(resourceUri != None and resourceUri.find('BlockConsistencyGroup') > 0):
             (s, h) = common.service_json_request(self.__ipAddr, self.__port, "GET", 
                                              Snapshot.URI_CONSISTENCY_GROUPS_SNAPSHOT_INSTANCE.format(resourceUri, suri), None, None, xml)
         else:

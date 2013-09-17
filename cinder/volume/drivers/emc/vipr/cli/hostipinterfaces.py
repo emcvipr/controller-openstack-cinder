@@ -208,7 +208,7 @@ class HostIPInterface(object):
         #Get the list of ipinterfaces from each host
         if(hostUris.__len__() > 0):
             for host in hostUris:
-                tempipinterfaceList = self.__hostObject.list_ipinterfaces(hostUri)
+                tempipinterfaceList = self.__hostObject.list_ipinterfaces(host)
                 if(tempipinterfaceList.__len__() > 0):
                     for tempipinterface in tempipinterfaceList:
                         ipinterfacesList.append(tempipinterface['id'])
@@ -391,7 +391,9 @@ def list_parser(subcommand_parsers, common_parser):
                                 parents=[common_parser],
                                 conflict_handler='resolve',
                                 help='Lists ip-interfaces')
-    list_parser.add_argument('-hl', '-hostlabel',
+    
+    mandatory_args = list_parser.add_argument_group('mandatory arguments')
+    mandatory_args.add_argument('-hl', '-hostlabel',
                                dest='hostlabel',
                                metavar='<hostlabel>',
                                help='Host for which ip-interfaces to be listed',
