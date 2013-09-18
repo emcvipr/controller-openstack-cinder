@@ -103,12 +103,12 @@ class EMCViPRDriverCommon():
     
     OPENSTACK_TAG = 'OpenStack'
 
-    def __init__(self, prtcl, configuration=None):
-        self.protocol = prtcl
+    def __init__(self, protocol, default_backend_name, configuration=None):
+        self.protocol = protocol
         self.configuration = configuration
         self.configuration.append_config_values(volume_opts)
         vipr_utils.COOKIE = None
-        
+
         # instantiate a few vipr cli objects for later use
         self.volume_obj = Volume(self.configuration.vipr_hostname, self.configuration.vipr_port)
         self.exportgroup_obj = ExportGroup(self.configuration.vipr_hostname, self.configuration.vipr_port)
@@ -119,10 +119,11 @@ class EMCViPRDriverCommon():
         self.stats = {'driver_version': '1.0',
                  'free_capacity_gb': 'unknown',
                  'reserved_percentage': '0',
-                 'storage_protocol': prtcl,
+                 'storage_protocol': protocol,
                  'total_capacity_gb': 'unknown',
-                 'vendor_name': 'EMC'}
-
+                 'vendor_name': 'EMC',
+                 'volume_backend_name': self.configuration.volume_backend_name or default_backend_name}
+        
     def check_for_setup_error(self):
         # validate all of the vipr_* configuration values
         if (self.configuration.vipr_hostname is None):
@@ -575,6 +576,7 @@ class EMCViPRDriverCommon():
                 self.stats['total_capacity_gb'] = free_gb + used_gb
                 self.stats['reserved_percentage'] = 100 * provisioned_gb/(free_gb + used_gb)
 
+            LOG.info(_("Volume stats updated: %s") % (self.stats))
             return self.stats
 
         except SOSError as e:

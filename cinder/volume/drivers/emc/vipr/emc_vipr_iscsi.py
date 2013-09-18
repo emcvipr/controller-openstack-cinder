@@ -33,7 +33,8 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
     def __init__(self, *args, **kwargs):
         super(EMCViPRISCSIDriver, self).__init__(*args, **kwargs)
         self.common = EMCViPRDriverCommon(
-                        'iSCSI',
+                        protocol='iSCSI',
+                        default_backend_name=self.__class__.__name__,
                         configuration=self.configuration)
 
     def check_for_setup_error(self):
@@ -181,8 +182,5 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
     def update_volume_stats(self):
         """Retrieve stats info from virtual pool/virtual array."""
         LOG.debug(_("Updating volume stats"))
-        stats = self.common.update_volume_stats()
-        stats['volume_backend_name'] = self.__class__.__name__
-        self._stats = stats
-        LOG.info(_("Volume stats updated: %s") % (stats))
+        self._stats = self.common.update_volume_stats()
 
