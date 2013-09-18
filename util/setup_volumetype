@@ -4,6 +4,8 @@
 # Set up volume type with corresponding vpool in ViPR
 cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance"
 cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance" set ViPR:VPOOL="High Performance"
+cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance" set volume_backend_name=EMCViPRISCSIDriver
 cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance FC"
 cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set ViPR:VPOOL="High Performance FC"
+cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set volume_backend_name=EMCViPRFCDriver
 cinder --os-username admin --os-tenant-name admin extra-specs-list
