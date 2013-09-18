@@ -124,7 +124,7 @@ class EMCViPRDriverCommon():
                  'vendor_name': 'EMC'}
 
     def check_for_setup_error(self):
-        # validate all of the vipr_* configuration values        
+        # validate all of the vipr_* configuration values
         if (self.configuration.vipr_hostname is None):
             message="vipr_hostname is not set in cinder configuration"
             raise exception.VolumeBackendAPIException(data=message)
@@ -154,8 +154,8 @@ class EMCViPRDriverCommon():
             raise exception.VolumeBackendAPIException(data=message)
                                 
         # check the rpc_response_timeout value, should be greater than 300 
-        if (self.configuration.rpc_response_timeout<300):
-            LOG.warn(_("cinder configuration should set rpc_response_time to at least 300 seconds"))
+        if (self.configuration.rpc_response_timeout is None or self.configuration.rpc_response_timeout<300):
+            LOG.warn(_("rpc_response_time should be set to at least 300 seconds"))
 
     def authenticate_user(self):       
         global AUTHENTICATED
