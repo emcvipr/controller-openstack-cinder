@@ -132,14 +132,18 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
 
         protocol = 'FC'
         hostname = connector['host']
+        initPorts = []
+        initNodes = []
         for i in xrange(len(connector['wwpns'])):
             initiatorNode = ':'.join(re.findall('..', connector['wwnns'][i])).upper()   # Add ":" every two digits
             initiatorPort = ':'.join(re.findall('..', connector['wwpns'][i])).upper()   # Add ":" every two digits
-            itls = self.common.initialize_connection(volume, protocol, initiatorNode, initiatorPort, hostname)
-            if itls:
-                properties['target_lun'] = itls[0]['hlu']
-                for itl in itls:
-                    properties['target_wwn'].append(itl['target']['port'].replace(':','').lower())
+            initPorts.append(initiatorPort)
+            initNodes.append(initiatorNode)
+        itls = self.common.initialize_connection(volume, protocol, initNodes, initPorts, hostname)
+        if itls:
+            properties['target_lun'] = itls[0]['hlu']
+            for itl in itls:
+                properties['target_wwn'].append(itl['target']['port'].replace(':','').lower())
         
         auth = volume['provider_auth']
         if auth:
@@ -158,10 +162,14 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         """Driver entry point to detach a volume from an instance."""
         protocol = 'FC'
         hostname = connector['host']
+        initPorts = []
+        initNodes = []
         for i in xrange(len(connector['wwpns'])):
             initiatorNode = ':'.join(re.findall('..', connector['wwnns'][i])).upper()   # Add ":" every two digits
             initiatorPort = ':'.join(re.findall('..', connector['wwpns'][i])).upper()   # Add ":" every two digits
-            self.common.terminate_connection(volume, protocol, initiatorNode, initiatorPort, hostname)
+            initPorts.append(initiatorPort)
+            initNodes.append(initiatorNode)
+        self.common.terminate_connection(volume, protocol, initNodes, initPorts, hostname)
 
     def get_volume_stats(self, refresh=False):
         """Get volume status.

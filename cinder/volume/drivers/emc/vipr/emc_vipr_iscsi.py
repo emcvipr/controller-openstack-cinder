@@ -132,12 +132,16 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             }
 
         """
+        initiatorNodes = []
         initiatorNode = None
+        initiatorNodes.append(initiatorNode);
+        initiatorPorts = []
         initiatorPort = connector['initiator']
+        initiatorPorts.append(initiatorPort)
         protocol = 'iSCSI'
         hostname = connector['host']
         itls = self.common.initialize_connection(volume,
-            protocol, initiatorNode, initiatorPort, hostname)
+            protocol, initiatorNodes, initiatorPorts, hostname)
         
         properties = {}
         properties['target_discovered'] = False
@@ -166,8 +170,12 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         initiatorPort = connector['initiator']
         protocol = 'iSCSI'
         hostname = connector['host']
+        initPorts = []
+        initNodes = []
+        initPorts.append(initiatorPort)
+        initNodes.append(initiatorNode)
         self.common.terminate_connection(volume,
-            protocol, initiatorNode, initiatorPort, hostname)
+            protocol, initNodes, initPorts, hostname)
 
     def get_volume_stats(self, refresh=False):
         """Get volume status.

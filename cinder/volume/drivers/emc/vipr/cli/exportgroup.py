@@ -300,6 +300,32 @@ class ExportGroup(object):
             return self.block_until_complete(exportgroup_uri, o["op_id"])
         return o
     
+    
+    def exportgroup_remove_volumes_by_uri(self, exportgroup_uri, vol_uri, sync=False, tenantname=None, projectname=None, snapshot=None, cg=None):
+                  
+         #if snapshot given then snapshot added to exportgroup
+        if(snapshot):
+            if(cg):
+                blockTypeName = 'consistency-groups'
+                from consistencygroup import ConsistencyGroup
+                resuri = ConsistencyGroup(self.__ipAddr, self.__port).consistencygroup_query(cg, projectname, tenantname) 
+            else:
+                blockTypeName = 'volumes'    
+                resuri = vol_uri
+                
+            snapshot_uri = Snapshot(self.__ipAddr, self.__port).snapshot_query('block', blockTypeName, resuri, snapshot)
+            #snapshot is exported or snapshot is added export group
+            vol_uri =   snapshot_uri
+
+        parms = {}
+
+        parms['volume_changes'] = self._remove_list(vol_uri)
+        
+        o = self.send_json_request(exportgroup_uri, parms)
+        if(sync):
+            return self.block_until_complete(exportgroup_uri, o["op_id"])
+        return o
+    
     # initator
         '''
         add initiator to export group
