@@ -148,7 +148,7 @@ class Authentication(object):
         parentshellpid = None
         installdir_cookie = None
         if sys.platform.startswith('linux'):
-            parentshellpid = os.getppid()
+            parentshellpid = os.getpid()
             if(cookiefile is None):
                 if (parentshellpid is not None):
                     cookiefile=str(username)+'cookie'+str(parentshellpid)
@@ -730,7 +730,7 @@ def authenticate_user(args):
             else:
                 passwd_user = sys.stdin.readline().rstrip()
         else:
-            raise SOSError(SOSError.CMD_LINE_ERR, username+" : invalid username")
+            raise SOSError(SOSError.CMD_LINE_ERR, args.username+" : invalid username")
         res = obj.authenticate_user(args.username, passwd_user, args.cookiedir,
                 args.cookiefile)
         return res

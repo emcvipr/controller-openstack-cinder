@@ -56,7 +56,7 @@ class HostInitiator(object):
     def query_by_name(self, initiatorName, hostName):
         
         hostUri = self.get_host_uri(hostName)
-        initiatorList = initiatorObj.get_host_object().list_initiators(hostUri)
+        initiatorList = self.get_host_object().list_initiators(hostUri)
         
         #Match the name and return uri
         for initiator in initiatorList:

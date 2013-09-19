@@ -174,7 +174,7 @@ class VcenterDatacenter(object):
             check = self.vcenterdatacenter_show(label, vcenter, tenantname)
 	    if(not check):
 	        raise SOSError(SOSError.NOT_FOUND_ERR,
-                       "vcenterdatacenter " + name + ": not found")
+                       "vcenterdatacenter " + tenantname + ": not found")
 
         except SOSError as e:
             if(e.err_code == SOSError.NOT_FOUND_ERR):

@@ -229,7 +229,7 @@ class HostIPInterface(object):
         #Get the list of ipinterfaces from each host
         if(hostUris.__len__() > 0):
             for host in hostUris:
-                tempipinterfaceList = self.__hostObject.list_ipinterfaces(hostUri)
+                tempipinterfaceList = self.__hostObject.list_ipinterfaces(host)
                 if(tempipinterfaceList.__len__() > 0):
                     for tempipinterface in tempipinterfaceList:
                         ipinterfacesList.append(tempipinterface['name'])

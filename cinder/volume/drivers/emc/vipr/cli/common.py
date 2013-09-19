@@ -30,6 +30,8 @@ import xml.dom.minidom
 import getpass
 from xml.etree import ElementTree
 import ConfigParser
+import hashlib
+import hmac
 
 
 
@@ -42,6 +44,8 @@ SESSION = None
 TIMEOUT_SEC = 20 # 20 SECONDS
 OBJCTRL_INSECURE_PORT           = '9010'
 OBJCTRL_PORT                    = '4443'
+
+BOURNE_DEBUG = '0'
 
 def _decode_list(data):
     rv = []
@@ -156,7 +160,7 @@ def service_json_request(ip_addr, port, http_method, uri, body, token=None,
                 raise SOSError(SOSError.NOT_FOUND_ERR,
                     "VIPR_CLI_INSTALL_DIR is not set. Please execute viprcli.profile\n")
             if sys.platform.startswith('linux'):
-                parentshellpid = os.getppid()
+                parentshellpid = os.getpid()
                 if (parentshellpid is not None):
                     form_cookiefile = install_dir + '/cookie/' + str(parentshellpid)
                 else:

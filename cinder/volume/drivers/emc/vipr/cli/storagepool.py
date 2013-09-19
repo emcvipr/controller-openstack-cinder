@@ -160,17 +160,12 @@ class StoragePool(object):
             storagename:           name of the storage system
             poolname:               name of the storage pool
             protocol:        protocols supported by pool
-            nativeId:        native ID fothe pool
-            extentions:        extended parameters and attributes
-            resiliency:        resiliency assosiated with pool
-            performance:    performance associated with the storage pool
-            efficiency:        efficiency associated with the storage pool
-            allocation        allocation of storage pool
+            extensions:        extended parameters and attributes
             maxSnapshots:    maxSnapshots permitted on the storage pool
             consistency:    consistency details of storage pool
-            resiliencymap:    resiliencymap of the storage pool
             freeCapacity:    freeCapacity of the storage pool
             totalCapacity:    totalCapacity of  the storage pool
+            deviceType: device type
         returns:
             JSON payload of the created storagepool
         '''
@@ -232,17 +227,17 @@ class StoragePool(object):
         if (protocol):
             parms['protocols'] = protocol
 
-        if (resiliency):
-            parms['resiliency_set'] = resiliency
+        #if (resiliency):
+        #    parms['resiliency_set'] = resiliency
 
-        if (performance):
-            parms['performances'] = performance
+        #if (performance):
+        #    parms['performances'] = performance
 
-        if (efficiency):
-            parms['space_efficiencies'] = efficiency
+        #if (efficiency):
+        #    parms['space_efficiencies'] = efficiency
 
-        if (allocation):
-            parms['on_demand_allocations'] = allocation
+        #if (allocation):
+        #    parms['on_demand_allocations'] = allocation
 
         if (maxSnapshots):
             parms['max_snapshots'] = maxSnapshots
@@ -253,8 +248,8 @@ class StoragePool(object):
         if (extensions):
             parms['controller_params'] = self.__encode_map(extensions)
 
-        if (resiliencymap):
-            parms['resiliency_map'] = self.__encode_map(resiliencymap)
+        #if (resiliencymap):
+        #    parms['resiliency_map'] = self.__encode_map(resiliencymap)
 
         if (freeCapacity):
             parms['free_capacity'] = freeCapacity
