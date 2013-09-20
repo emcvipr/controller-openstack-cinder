@@ -360,22 +360,23 @@ class EMCViPRDriverCommon():
                     LOG.debug("checking for initiator port:" + initiatorPorts[i])
                     foundhostname= self._find_host(initiatorPorts[i])
                     if (foundhostname is None):
-                        if ( self._host_exists(hostname) is not None):
+                        hostfound = self._host_exists(hostname)
+                        if ( hostfound is None):
                             # create a host so it can be added to the export group
+                            hostfound = hostname
                             self.host_obj.create(hostname, platform.system(), hostname, self.configuration.vipr_tenant, project=None, port=None, username=None, passwd=None, usessl=None, osversion=None, cluster=None, datacenter=None, vcenter=None)
                             LOG.info("Created host " + hostname)
                         # add the initiator to the host 
-                        self.hostinitiator_obj.create(hostname, protocol, initiatorNodes[i], initiatorPorts[i]);
-                        LOG.info("Initiator " + initiatorPorts[i] + " added to host " + hostname)
-                        foundhostname = hostname
-                else:
-                    LOG.info("Found host " + foundhostname)
-
-                # create an export group for this host
-                foundgroupname = hostname + 'SG'
-                # create a unique name
-                foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
-                res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname);
+                        self.hostinitiator_obj.create(hostfound, protocol, initiatorNodes[i], initiatorPorts[i]);
+                        LOG.info("Initiator " + initiatorPorts[i] + " added to host " + hostfound)
+                        foundhostname = hostfound
+                    else:
+                        LOG.info("Found host " + foundhostname)
+                    # create an export group for this host
+                    foundgroupname = foundhostname + 'SG'
+                    # create a unique name
+                    foundgroupname = foundgroupname + '-' + ''.join(random.choice(string.ascii_uppercase + string.digits) for x in range(6))
+                    res = self.exportgroup_obj.exportgroup_create(foundgroupname, self.configuration.vipr_project, self.configuration.vipr_tenant, self.configuration.vipr_varray, 'Host', foundhostname);
             LOG.debug("adding the volume to the exportgroup : " +volumename)
             res = self.exportgroup_obj.exportgroup_add_volumes(foundgroupname, self.configuration.vipr_tenant, self.configuration.vipr_project, volumename, None, None,None, True)
             return self._find_device_info(volume, initiatorPorts)
