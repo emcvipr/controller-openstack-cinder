@@ -7,13 +7,14 @@ This guide explains how to install, configure, and make use of the EMC ViPR Cind
 Overview
 ========
 
-The EMC ViPR Cinder driver is an ISCSIDriver, with the ability to create/delete and attach/detach volumes and create/delete snapshots, etc.
+The EMC ViPR Cinder driver contains both an ISCSIDriver as well as a FibreChannelDriver,
+with the ability to create/delete and attach/detach volumes and create/delete snapshots, etc.
 
 
 Requirements
 ============
 
-EMC ViPR version 1.0, or above, is required as well as at least one storage array that support iSCSI volumes. Refer to the EMC ViPR documentation installation and configuration instructions. 
+EMC ViPR version 1.0, or above, is required. Refer to the EMC ViPR documentation installation and configuration instructions. 
 
 
 
@@ -58,7 +59,7 @@ Multi-volume consistency groups are not supported by the ViPR ViPR Cinder Driver
 * The ViPR Cinder Driver requires one Virtual Storage Pool, with the following requirements (non-specified values can be set as desired):
    - Storage Type: Block
    - Provisioning Type: Thin
-   - Protocol: iSCSI
+   - Protocol: iSCSI or Fibre Channel or both
    - Multi-Volume Consistency: DISABLED
    - Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots
 
@@ -83,6 +84,13 @@ vipr_project=vprojectname
 vipr_varray=varrayname
 ```
 
+note: to utilize the Fibre Channel Driver, replace the volume_driver line above with:
+
+```
+volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRFCDriver
+
+```
+
 * Modify the rpc_response_timeout value in /etc/cinder/cinder.conf to at least 5 minutes. if this value does not already exist within the cinder.conf file, please add it
 
 ```
@@ -103,7 +111,7 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 ```
 
 
-Add your nova compute nodes to ViPR
+For iSCSI ONLY, Add your nova compute nodes to ViPR
 ----------------------
 
 * on the cinder-volume node, cd to the cinder/volume/drivers/emc/vipr/cli directory 
