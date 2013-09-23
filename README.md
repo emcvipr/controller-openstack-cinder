@@ -83,6 +83,12 @@ vipr_project=vprojectname
 vipr_varray=varrayname
 ```
 
+* Modify the rpc_response_timeout value in /etc/cinder/cinder.conf to at least 5 minutes. if this value does not already exist within the cinder.conf file, please add it
+
+```
+rpc_response_timeout=300
+
+```
 
 * Create OpenStack volume types with the cinder command
 
