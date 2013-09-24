@@ -67,7 +67,10 @@ volume_opts = [
                help='Project to utilize within the EMC ViPR Instance'),                 
     cfg.StrOpt('vipr_varray',
                default=None,
-               help='Virtual Array to utilize within the EMC ViPR Instance')                  
+               help='Virtual Array to utilize within the EMC ViPR Instance'),                  
+    cfg.StrOpt('vipr_cookiedir',
+               default='/tmp',
+               help='directory to store temporary cookies, defaults to /tmp')                  
     ]
 
 CONF=cfg.CONF
@@ -169,7 +172,8 @@ class EMCViPRDriverCommon():
         # we should check to see if we are already authenticated before blindly doing it again
         if (AUTHENTICATED == False ):
             obj = Authentication(self.configuration.vipr_hostname, self.configuration.vipr_port)
-            cookiedir = os.getcwd()
+            # cookiedir = os.getcwd()
+            cookiedir=self.configuration.vipr_cookiedir
             obj.authenticate_user(self.configuration.vipr_username, self.configuration.vipr_password, cookiedir, None)
             AUTHENTICATED = True
 
