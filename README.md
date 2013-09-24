@@ -82,9 +82,12 @@ vipr_password=password
 vipr_tenant=Provider Tenant 
 vipr_project=vprojectname
 vipr_varray=varrayname
+vipr_cookiedir=/tmp
 ```
 
-note: to utilize the Fibre Channel Driver, replace the volume_driver line above with:
+note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if specified
+
+note 2: to utilize the Fibre Channel Driver, replace the volume_driver line above with:
 
 ```
 volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRFCDriver
