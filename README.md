@@ -123,6 +123,16 @@ For iSCSI ONLY, Add your nova compute nodes to ViPR
 ```
 
 
+For Fibre Channel ONLY, enable sg_scan to run under rootwrap
+
+----------------------
+
+* within the /etc/cinder/cinder.conf file, add the following line
+
+```
+   sg_scan: CommandFilter, sc_scan, root  
+
+```
 
 
 
