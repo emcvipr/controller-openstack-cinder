@@ -23,6 +23,10 @@ INSTNAME="instance-${DATE}"
 #get the nova image id
 IMAGE=$( nova image-list | grep "cirros-0.3.1-x86_64-uec " | tr -s ' '| cut -f2 -d' ')
 
+if [ "$IMAGE" == "" ]; then
+   IMAGE=$( nova image-list | grep "Cirros 0.3.0 x86_64 " | tr -s ' '| cut -f2 -d' ')
+fi
+
 function cinder_create-volume {
 	# Create the volume
 	echo "Creating volume: ${1}"
