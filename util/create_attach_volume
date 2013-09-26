@@ -11,6 +11,7 @@ DATE=`date "+%m%d%Y%H%M"`
 #MNT="/dev/vdc"
 MNT="auto"
 VOLUMEIDTYPE="ViPR High Performance"
+VOLUMEIDTYPE="myVolType"
 NAMESUFFIX="openstack-${HOSTNAME}-${DATE}"
 VOLNAME="volume-${NAMESUFFIX}"
 CLONENAME="clone-${NAMESUFFIX}"
