@@ -37,7 +37,7 @@ The following operations are supported:
 Unsupported Operations
 ======================
 
-The following operations are not support:
+The following operations are not supported:
 * Create volume from snapshot
 
 
@@ -61,7 +61,7 @@ Multi-volume consistency groups are not supported by the ViPR ViPR Cinder Driver
    - Provisioning Type: Thin
    - Protocol: iSCSI or Fibre Channel or both
    - Multi-Volume Consistency: DISABLED
-   - Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots
+   - Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots. 
 
 
 Download and configure EMC ViPR Cinder driver
