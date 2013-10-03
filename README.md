@@ -118,15 +118,14 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 iSCSI Specific Notes
 ====================
 
-Add your nova compute nodes to ViPR
-----------------------
+* Add your nova compute nodes to ViPR. This will add the compute node iSCSI initiators to the ViPR networks 
 
-* on the cinder-volume node, cd to the cinder/volume/drivers/emc/vipr/cli directory 
+ * on the cinder-volume node, cd to the cinder/volume/drivers/emc/vipr/cli directory 
 
-* run the viprcli.py command to add the compute nodes to the ViPR networks
+ * run the viprcli.py command to add the compute nodes to the ViPR networks
 
 ```
-   ./viprcli.py openstack add_host -name <hostname> 
+   ./viprcli.py openstack add_host -name <hostname> -wwpn <initiator>
 ```
 
 
@@ -140,10 +139,7 @@ Fibre Channel Specific Notes
 * There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations autmoatically as part of the provisioning process
 
 
-Enable sg_scan to run under rootwrap
-----------------------
-
-* within the /etc/cinder/cinder.conf file, add the following line
+* Enable sg_scan to run under rootwrap, within the /etc/cinder/cinder.conf file, add the following line
 
 ```
    sg_scan: CommandFilter, sc_scan, root  
