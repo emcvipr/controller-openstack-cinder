@@ -114,6 +114,7 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 ```
 
 
+
 iSCSI Specific Notes
 ====================
 
@@ -122,11 +123,13 @@ Add your nova compute nodes to ViPR
 
 * on the cinder-volume node, cd to the cinder/volume/drivers/emc/vipr/cli directory 
 
-* run the viprcli.py command to add ther compute nodes to the ViPR networks
+* run the viprcli.py command to add the compute nodes to the ViPR networks
 
 ```
    ./viprcli.py openstack add_host -name <hostname> 
 ```
+
+
 
 
 Fibre Channel Specific Notes
