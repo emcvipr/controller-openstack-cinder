@@ -114,7 +114,10 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 ```
 
 
-For iSCSI ONLY, Add your nova compute nodes to ViPR
+iSCSI Specific Notes
+====================
+
+Add your nova compute nodes to ViPR
 ----------------------
 
 * on the cinder-volume node, cd to the cinder/volume/drivers/emc/vipr/cli directory 
@@ -126,7 +129,15 @@ For iSCSI ONLY, Add your nova compute nodes to ViPR
 ```
 
 
-For Fibre Channel ONLY, enable sg_scan to run under rootwrap
+Fibre Channel Specific Notes
+============================
+
+* The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
+
+* There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations autmoatically as part of the provisioning process
+
+
+Enable sg_scan to run under rootwrap
 ----------------------
 
 * within the /etc/cinder/cinder.conf file, add the following line
