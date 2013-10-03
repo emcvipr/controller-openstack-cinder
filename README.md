@@ -53,8 +53,8 @@ The EMC ViPR environment must meet specific configuration requirements to suppor
 * ViPR users must be assigned a Tenant Administrator role or a Project Administrator role for the Project being used. ViPR roles are configured by ViPR Security Administrators. Consult the EMC ViPR documentation for details.
 * The following configuration must have been done by a ViPR System Administrator, using the ViPR UI, ViPR API, or ViPR CLI:
    - ViPR virtual assets, such as virtual arrays and virtual pools, must have been created.
-Note
-Multi-volume consistency groups are not supported by the ViPR ViPR Cinder Driver. Please ensure that the Multi-volume consistency option is not enabled on the Virtual Pool with ViPR.
+   - Each virtual array designated for use in the OpenStack iSCSI driver must have an iSCSI network created with appropriate IP storage ports.
+   Note: Multi-volume consistency groups are not supported by the ViPR ViPR Cinder Driver. Please ensure that the Multi-volume consistency option is not enabled on the Virtual Pool with ViPR.
 * Each instance of the ViPR Cinder Driver can be used to manage only one one virtual array and one virtual pool within ViPR. 
 * The ViPR Cinder Driver requires one Virtual Storage Pool, with the following requirements (non-specified values can be set as desired):
    - Storage Type: Block
@@ -125,9 +125,14 @@ iSCSI Specific Notes
  * run the viprcli.py command to add the compute nodes to the ViPR networks
 
 ```
-   ./viprcli.py openstack add_host -name <hostname> -wwpn <initiator>
+   python viprcli.py openstack add_host -name <hostname> -wwpn <initiator>
 ```
 
+  * Note: you may need to run the following command first to authenticate with ViPR system admin credentials.
+
+```
+   python viprcli.py authenticate -u <sysadmin_user> -d <cookiedir>
+```
 
 
 
@@ -139,7 +144,7 @@ Fibre Channel Specific Notes
 * There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations autmoatically as part of the provisioning process
 
 
-* Enable sg_scan to run under rootwrap, within the /etc/cinder/cinder.conf file, add the following line
+* If you are running an older version of OpenStack, you may need to add the following line within the /etc/cinder/rootwrap.d/volume.filters file, to enable sg_scan to run under rootwrap.
 
 ```
    sg_scan: CommandFilter, sc_scan, root  
