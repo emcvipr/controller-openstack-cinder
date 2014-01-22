@@ -90,7 +90,7 @@ note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if s
 note 2: to utilize the Fibre Channel Driver, replace the volume_driver line above with:
 
 ```
-volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRFCDriver
+volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
 
 ```
 
