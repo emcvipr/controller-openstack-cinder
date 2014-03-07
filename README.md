@@ -14,7 +14,7 @@ with the ability to create/delete and attach/detach volumes and create/delete sn
 Requirements
 ============
 
-EMC ViPR version 1.0, or above, is required. Refer to the EMC ViPR documentation installation and configuration instructions. 
+EMC ViPR version 1.0 is required. Refer to the EMC ViPR documentation installation and configuration instructions. 
 
 
 
