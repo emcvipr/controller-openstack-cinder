@@ -28,18 +28,18 @@ volumes and create/delete snapshots, etc.
 ====================
 
 The following operations are supported:
-1. Create volume
-2. Delete volume
-3. Attach volume
-4. Detach volume
-5. Create snapshot
-6. Delete snapshot
-7. Get Volume Stats
-8. Copy image to volume
-9. Copy volume to image
-10.Clone volume
-11.Create volume from snapshot
-12.Extend volume
+1. Create volume.
+2. Delete volume.
+3. Attach volume.
+4. Detach volume.
+5. Create snapshot.
+6. Delete snapshot.
+7. Get Volume Stats.
+8. Copy image to volume.
+9. Copy volume to image.
+10.Clone volume.
+11.Create volume from snapshot.
+12.Extend volume.
 
 
 
