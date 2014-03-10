@@ -88,7 +88,7 @@ Before you begin
    Edit the file viprcli.profile using the vi command and set the VIPR_HOSTNAME to
    the ViPR public virtual IP address and VIPR_PORT=4443 environment variable and
    save the file.
-   ```
+    ```
 	# vi viprcli.profile
 	#!/usr/bin/sh
 	# Installation directory of ViPR CLI
