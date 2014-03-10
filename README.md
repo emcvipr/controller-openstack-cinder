@@ -28,18 +28,18 @@ volumes and create/delete snapshots, etc.
 ====================
 
 The following operations are supported:
-1. Create volume.
-2. Delete volume.
-3. Attach volume.
-4. Detach volume.
-5. Create snapshot.
-6. Delete snapshot.
-7. Get Volume Stats.
-8. Copy image to volume.
-9. Copy volume to image.
-10.Clone volume.
-11.Create volume from snapshot.
-12.Extend volume.
+* Create volume.
+* Delete volume.
+* Attach volume.
+* Detach volume.
+* Create snapshot.
+* Delete snapshot.
+* Get Volume Stats.
+* Copy image to volume.
+* Copy volume to image.
+* Clone volume.
+* Create volume from snapshot.
+* Extend volume.
 
 
 
@@ -245,7 +245,14 @@ cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performanc
 cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
 
-6. Fibre Channel Specific Notes
+6. iSCSI specific notes
+=======================
+
+* The openstack compute host must be added to the ViPR along with its iSCSI initiator.
+* The iSCSI initiator must be associated with IP network on the ViPR.
+
+
+7. Fibre Channel Specific Notes
 ============================
 
 * The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
