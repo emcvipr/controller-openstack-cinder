@@ -66,9 +66,9 @@ cd cli/temp
 ```
 3. Either point your browser to https://<FQDN>:4443/cli or run the wget command
    to retrieve the ViPR CLI installation bundle:
-   ```
-   wget https://<FQDN>:4443/cli
-   ```
+```
+wget https://<FQDN>:4443/cli
+```
 
    For sites with self-signed certificates or where issues are detected, optionally use
    http://<ViPR_virtual_IP>:9998/cli only when you are inside a trusted
@@ -109,9 +109,9 @@ ViPR_PORT=4443
 ```
 8. Run the source command to set the path environment variable for the ViPR
    executable.
-    ```
-	source ./viprcli.profile
-	```
+```
+source ./viprcli.profile
+```
 9. From the command prompt run: viprcli -h. If the help for viprcli is displayed, then the installation is successful.
 
 5.1.2 Copying ViPR CLI on the non supported platform
