@@ -18,7 +18,7 @@ volumes and create/delete snapshots, etc.
 3. Requirements
 ============
 
-1. EMC ViPR version 1.0, or above, is required. Refer to the EMC ViPR
+1. EMC ViPR version 1.1 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
 
@@ -245,20 +245,7 @@ cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performanc
 cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
 
-6. iSCSI Specific Notes
-====================
-
-* Add your nova compute nodes to ViPR. This will add the compute node iSCSI initiators to the ViPR networks 
-
- * on the cinder-volume node as a root user run the viprcli.py command to add the compute nodes to the ViPR networks
-
-```
-   viprcli authenticate -u <sysadmin_user> -d <cookiedir>
-   viprcli openstack add_host -name <hostname> -wwpn <initiator>
-```
-
-
-7. Fibre Channel Specific Notes
+6. Fibre Channel Specific Notes
 ============================
 
 * The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
