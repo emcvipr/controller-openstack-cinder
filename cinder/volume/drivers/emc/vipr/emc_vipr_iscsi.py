@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 # Copyright (c) 2013 EMC Corporation
 # All Rights Reserved.
@@ -20,56 +19,46 @@ Driver for EMC ViPR iSCSI volumes.
 
 """
 
-from oslo.config import cfg
-
-from cinder import exception
-# ERIC: we get an error importing flags
-# from cinder import flags
 from cinder.openstack.common import log as logging
 from cinder.volume import driver
-from cinder.volume.drivers.emc.vipr.emc_vipr_driver_common import EMCViPRDriverCommon 
+from cinder.volume.drivers.emc.vipr import emc_vipr_driver_common
 
 LOG = logging.getLogger(__name__)
 
 
 class EMCViPRISCSIDriver(driver.ISCSIDriver):
     """EMC ViPR iSCSI Driver"""
-    
-   
+
     def __init__(self, *args, **kwargs):
         super(EMCViPRISCSIDriver, self).__init__(*args, **kwargs)
-        self.common = EMCViPRDriverCommon(
-                        protocol='iSCSI',
-                        default_backend_name=self.__class__.__name__,
-                        configuration=self.configuration)
+        self.common = self._get_common_driver()
+
+    def _get_common_driver(self):
+        return emc_vipr_driver_common.EMCViPRDriverCommon(
+            protocol='iSCSI',
+            default_backend_name=self.__class__.__name__,
+            configuration=self.configuration)
 
     def check_for_setup_error(self):
         self.common.check_for_setup_error()
 
     def create_volume(self, volume):
-        """Creates a Volume. """
+        """Creates a Volume."""
         self.common.create_volume(volume)
         self.common.setTags(volume)
 
     def create_cloned_volume(self, volume, src_vref):
         """Creates a cloned Volume."""
         self.common.create_cloned_volume(volume, src_vref)
-        self.common.setTags(volume)                
-        
+        self.common.setTags(volume)
+
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
-        #self.common.create_volume_from_snapshot(volume, snapshot)
-        snapshotname = snapshot['name']
-        volumename = volume['name']
-        exception_message = (_('Error Create Volume from Snapshot: '
-                             'Volume: %(volumename)s  Snapshot: '
-                             '%(snapshotname)s. Create Volume '
-                             'from Snapshot is NOT supported on '
-                             'EMCViPRISCSIDriver.')
-                             % {'volumename': volumename,
-                                'snapshotname': snapshotname})
-        LOG.error(exception_message)
-        raise exception.VolumeBackendAPIException(data=exception_message)
+        self.common.create_volume_from_snapshot(snapshot, volume)
+
+    def extend_volume(self, volume, new_size):
+        """expands the size of the volume."""
+        self.common.expand_volume(volume, new_size)
 
     def delete_volume(self, volume):
         """Deletes an EMC volume."""
@@ -84,7 +73,11 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         self.common.delete_snapshot(snapshot)
 
     def _iscsi_location(self, ip, target, iqn, lun=None):
-        return "%s:%s,%s %s %s" % (ip, self.configuration.iscsi_port, target, iqn, lun)
+        return "%s:%s,%s %s %s" % (ip,
+                                   self.configuration.iscsi_port,
+                                   target,
+                                   iqn,
+                                   lun)
 
     def ensure_export(self, context, volume):
         """Driver entry point to get the export info for an existing volume."""
@@ -108,20 +101,15 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
         the iscsi driver returns a driver_volume_type of 'iscsi'.
         the format of the driver data is defined as:
-    
-            :target_discovered:    boolean indicating whether discovery was used
-    
+            :target_discovered:    boolean indicating
+            whether discovery was used
             :target_iqn:    the IQN of the iSCSI target
-    
             :target_portal:    the portal of the iSCSI target
-    
             :target_lun:    the lun of the iSCSI target
-    
             :volume_id:    the id of the volume (currently used by xen)
-    
             :auth_method:, :auth_username:, :auth_password:
-    
-                the authentication details. Right now, either auth_method is not
+                the authentication details. Right now,
+                either auth_method is not
                 present meaning no authentication, or auth_method == `CHAP`
                 meaning use CHAP with the specified credentials.
 
@@ -140,23 +128,25 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """
         initiatorNodes = []
         initiatorNode = None
-        initiatorNodes.append(initiatorNode);
+        initiatorNodes.append(initiatorNode)
         initiatorPorts = []
         initiatorPort = connector['initiator']
         initiatorPorts.append(initiatorPort)
         protocol = 'iSCSI'
         hostname = connector['host']
         itls = self.common.initialize_connection(volume,
-            protocol, initiatorNodes, initiatorPorts, hostname)
-        
+                                                 protocol,
+                                                 initiatorNodes,
+                                                 initiatorPorts,
+                                                 hostname)
         properties = {}
         properties['target_discovered'] = False
         properties['volume_id'] = volume['id']
         if itls:
             properties['target_iqn'] = itls[0]['target']['port']
-            properties['target_portal'] = itls[0]['target']['ip_address'] + ':' + itls[0]['target']['tcp_port']
+            properties['target_portal'] = itls[0]['target']['ip_address'] + \
+                ':' + itls[0]['target']['tcp_port']
             properties['target_lun'] = itls[0]['hlu']
-        
         auth = volume['provider_auth']
         if auth:
             (auth_method, auth_username, auth_secret) = auth.split()
@@ -181,7 +171,10 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         initPorts.append(initiatorPort)
         initNodes.append(initiatorNode)
         self.common.terminate_connection(volume,
-            protocol, initNodes, initPorts, hostname)
+                                         protocol,
+                                         initNodes,
+                                         initPorts,
+                                         hostname)
 
     def get_volume_stats(self, refresh=False):
         """Get volume status.
@@ -197,4 +190,3 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """Retrieve stats info from virtual pool/virtual array."""
         LOG.debug(_("Updating volume stats"))
         self._stats = self.common.update_volume_stats()
-

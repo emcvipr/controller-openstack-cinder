@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 # Copyright (c) 2013 EMC Corporation
 # All Rights Reserved.
@@ -20,58 +19,49 @@ Driver for EMC ViPR FC volumes.
 
 """
 
-import os
 import re
-import socket
-import time
-from xml.dom.minidom import parseString
 
-from cinder import exception
 from cinder.openstack.common import log as logging
-from cinder import utils
 from cinder.volume import driver
-from cinder.volume.drivers.emc.vipr.emc_vipr_driver_common import EMCViPRDriverCommon 
+
+from cinder.volume.drivers.emc.vipr import emc_vipr_driver_common
 
 LOG = logging.getLogger(__name__)
 
 
 class EMCViPRFCDriver(driver.FibreChannelDriver):
     """EMC ViPR FC Driver"""
-    
+
     def __init__(self, *args, **kwargs):
         super(EMCViPRFCDriver, self).__init__(*args, **kwargs)
-        self.common = EMCViPRDriverCommon(
-                        protocol='FC',
-                        default_backend_name=self.__class__.__name__,
-                        configuration=self.configuration)
+        self.common = self._get_common_driver()
+
+    def _get_common_driver(self):
+        return emc_vipr_driver_common.EMCViPRDriverCommon(
+            protocol='FC',
+            default_backend_name=self.__class__.__name__,
+            configuration=self.configuration)
 
     def check_for_setup_error(self):
         self.common.check_for_setup_error()
 
     def create_volume(self, volume):
-        """Creates a Volume. """
+        """Creates a Volume."""
         self.common.create_volume(volume)
         self.common.setTags(volume)
 
     def create_cloned_volume(self, volume, src_vref):
         """Creates a cloned Volume."""
         self.common.create_cloned_volume(volume, src_vref)
-        self.common.setTags(volume)                
-        
+        self.common.setTags(volume)
+
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
-        #self.common.create_volume_from_snapshot(volume, snapshot)
-        snapshotname = snapshot['name']
-        volumename = volume['name']
-        exception_message = (_('Error Create Volume from Snapshot: '
-                             'Volume: %(volumename)s  Snapshot: '
-                             '%(snapshotname)s. Create Volume '
-                             'from Snapshot is NOT supported on '
-                             'EMCViPRFCDriver.')
-                             % {'volumename': volumename,
-                                'snapshotname': snapshotname})
-        LOG.error(exception_message)
-        raise exception.VolumeBackendAPIException(data=exception_message)
+        self.common.create_volume_from_snapshot(snapshot, volume)
+
+    def extend_volume(self, volume, new_size):
+        """expands the size of the volume."""
+        self.common.expand_volume(volume, new_size)
 
     def delete_volume(self, volume):
         """Deletes an EMC volume."""
@@ -138,19 +128,20 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
 
         protocol = 'FC'
         hostname = connector['host']
-        initPorts = []
-        initNodes = []
-        for i in xrange(len(connector['wwpns'])):
-            initiatorNode = ':'.join(re.findall('..', connector['wwnns'][i])).upper()   # Add ":" every two digits
-            initiatorPort = ':'.join(re.findall('..', connector['wwpns'][i])).upper()   # Add ":" every two digits
-            initPorts.append(initiatorPort)
-            initNodes.append(initiatorNode)
-        itls = self.common.initialize_connection(volume, protocol, initNodes, initPorts, hostname)
+        initPorts, initNodes = self._build_initport_initnode_list(connector)
+        itls = self.common.initialize_connection(volume,
+                                                 protocol,
+                                                 initNodes,
+                                                 initPorts,
+                                                 hostname)
         if itls:
             properties['target_lun'] = itls[0]['hlu']
-            for itl in itls:
-                properties['target_wwn'].append(itl['target']['port'].replace(':','').lower())
-        
+            target_wwns, initiator_target_map = \
+                self._build_initiator_target_map(itls, connector)
+
+        properties['target_wwn'] = target_wwns
+        properties['initiator_target_map'] = initiator_target_map
+
         auth = volume['provider_auth']
         if auth:
             (auth_method, auth_username, auth_secret) = auth.split()
@@ -168,14 +159,49 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         """Driver entry point to detach a volume from an instance."""
         protocol = 'FC'
         hostname = connector['host']
+        initPorts, initNodes = self._build_initport_initnode_list(connector)
+        itls = self.common.terminate_connection(volume,
+                                                protocol,
+                                                initNodes,
+                                                initPorts,
+                                                hostname)
+
+        target_wwns, initiator_target_map = self._build_initiator_target_map(
+            itls, connector)
+        data = {'driver_volume_type': 'fibre_channel',
+                'data': {'target_wwn': target_wwns,
+                         'initiator_target_map': initiator_target_map}}
+
+        LOG.debug(_('Return FC data: %(data)s.') % {'data': data})
+        return data
+
+    def _build_initiator_target_map(self, itls, connector):
+
+        target_wwns = []
+        for itl in itls:
+            target_wwns.append(itl['target']['port'].replace(':', '').lower())
+
+        initiator_wwns = connector['wwpns']
+        initiator_target_map = {}
+        for initiator in initiator_wwns:
+            initiator_target_map[initiator] = target_wwns
+
+        return target_wwns, initiator_target_map
+
+    def _build_initport_initnode_list(self, connector):
         initPorts = []
         initNodes = []
         for i in xrange(len(connector['wwpns'])):
-            initiatorNode = ':'.join(re.findall('..', connector['wwnns'][i])).upper()   # Add ":" every two digits
-            initiatorPort = ':'.join(re.findall('..', connector['wwpns'][i])).upper()   # Add ":" every two digits
+            initiatorNode = ':'.join(re.findall(
+                '..',
+                connector['wwnns'][i])).upper()   # Add ":" every two digits
+            initiatorPort = ':'.join(re.findall(
+                '..',
+                connector['wwpns'][i])).upper()   # Add ":" every two digits
             initPorts.append(initiatorPort)
             initNodes.append(initiatorNode)
-        self.common.terminate_connection(volume, protocol, initNodes, initPorts, hostname)
+
+        return initPorts, initNodes
 
     def get_volume_stats(self, refresh=False):
         """Get volume status.
