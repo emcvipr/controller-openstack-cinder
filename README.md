@@ -60,10 +60,10 @@ Before you begin
 
 1. Log in to the Linux server as root.
 2. Create a temporary directory to download the CLI installer.
-   ```
-   mkdir cli/temp
-   cd cli/temp
-   ```
+```
+mkdir cli/temp
+cd cli/temp
+```
 3. Either point your browser to https://<FQDN>:4443/cli or run the wget command
    to retrieve the ViPR CLI installation bundle:
    ```
@@ -76,37 +76,37 @@ Before you begin
    network vip. The CLI installation bundle is downloaded to the current directory.
    
 4. Use tar to extract the CLI and its support files from the installation bundle.
-   ```
-   tar -xvzf <cli_install_bundle>
-   ```
+```
+tar -xvzf <cli_install_bundle>
+```
 5. Run the CLI installation program.
-   ```
-   ./Installer_viprcli.linux
-   ```
+```
+./Installer_viprcli.linux
+```
 6. Change directory to /opt/vipr/cli or to the directory where the CLI is installed.
 7. Note : Perform this step only when you have not provided the correct input in step 5.
    Edit the file viprcli.profile using the vi command and set the VIPR_HOSTNAME to
    the ViPR public virtual IP address and VIPR_PORT=4443 environment variable and
    save the file.
-    ```
-	# vi viprcli.profile
-	#!/usr/bin/sh
-	# Installation directory of ViPR CLI
-	ViPR_CLI_INSTALL_DIR=/opt/ViPR/cli
-	# Add the ViPR install directory to the PATH and PYTHONPATH env 
-	variables
-	if [ -n $ViPR_CLI_INSTALL_DIR ]
-	then
- 	export PATH=$ViPR_CLI_INSTALL_DIR/bin:$PATH
- 	export PYTHONPATH=$ViPR_CLI_INSTALL_DIR/bin:$PYTHONPATH
-	fi
-	# USER CONFIGURABLE ViPR VARIABLES
-	# ViPR Host fully qualified domain name
-	ViPR_HOSTNAME=example.mydomain.com
-	# ViPR Port Number
-	ViPR_PORT=4443
-	:wq
-	```
+```
+# vi viprcli.profile
+#!/usr/bin/sh
+# Installation directory of ViPR CLI
+ViPR_CLI_INSTALL_DIR=/opt/ViPR/cli
+# Add the ViPR install directory to the PATH and PYTHONPATH env 
+variables
+if [ -n $ViPR_CLI_INSTALL_DIR ]
+then
+export PATH=$ViPR_CLI_INSTALL_DIR/bin:$PATH
+export PYTHONPATH=$ViPR_CLI_INSTALL_DIR/bin:$PYTHONPATH
+fi
+# USER CONFIGURABLE ViPR VARIABLES
+# ViPR Host fully qualified domain name
+ViPR_HOSTNAME=example.mydomain.com
+# ViPR Port Number
+ViPR_PORT=4443
+:wq
+```
 8. Run the source command to set the path environment variable for the ViPR
    executable.
     ```
