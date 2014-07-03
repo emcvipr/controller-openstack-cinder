@@ -28,6 +28,7 @@ from cinder import context
 from cinder import exception
 from cinder.openstack.common import log as logging
 from cinder.volume import volume_types
+from cinder import volume as cinder_volume
 
 # for the delegator
 LOG = logging.getLogger(__name__)
@@ -126,6 +127,8 @@ class EMCViPRDriverCommon(object):
                       'volume_backend_name':
                       self.configuration.volume_backend_name
                       or default_backend_name}
+
+        self.volume_api = cinder_volume.API()
 
     def check_for_vipr_cli_path(self):
         if (self.configuration.vipr_cli_path is None):
@@ -238,11 +241,6 @@ class EMCViPRDriverCommon(object):
                                          sync=True,
                                          number_of_volumes=1,
                                          thin_provisioned=None,
-                                         # no longer specified in volume
-                                         # creation
-                                         protection=None,
-                                         protection_varrays=None,
-                                         consistent_volume_label=None,
                                          consistencygroup=None)
         except SOSError as e:
             if(e.err_code == SOSError.SOS_FAILURE_ERR):
@@ -380,6 +378,9 @@ class EMCViPRDriverCommon(object):
         """Creates volume from given snapshot ( snapshot clone to volume )."""
         self.authenticate_user()
         src_snapshot_name = snapshot['name']
+        src_vol_ref = self.volume_api.get(context.get_admin_context(),
+                                                       snapshot['volume_id'])
+        src_vol_name = self._get_volume_name(src_vol_ref)
         new_volume_name = self._get_volume_name(volume)
         number_of_volumes = 1
         from common import SOSError
@@ -390,7 +391,7 @@ class EMCViPRDriverCommon(object):
                 self.configuration.vipr_project,
                 new_volume_name,
                 number_of_volumes,
-                None,
+                src_vol_name,
                 src_snapshot_name,
                 sync=True)
         except SOSError as e:

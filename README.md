@@ -18,7 +18,7 @@ volumes and create/delete snapshots, etc.
 3. Requirements
 ============
 
-1. EMC ViPR version 1.1 is required. Refer to the EMC ViPR
+1. EMC ViPR version 2.0 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
 
