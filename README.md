@@ -139,7 +139,6 @@ vipr_hostname=<ViPR-Host-Name>
 vipr_port=4443
 vipr_username=<username>
 vipr_password=<password>
-vipr_cli_path=<CLI-Install-Path>
 vipr_tenant=<Tenant> 
 vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
@@ -168,6 +167,8 @@ service openstack-cinder-volume stop
 * Now, restart the cinder-volume service using the below command
 ```
 /usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf --logfile /var/log/cinder/volume.log &>/dev/null
+```
+* To stop the cinder-volume process, which is started using the above command, plese use 'kill'
 ```
 * Create OpenStack volume types with the cinder command
 
@@ -225,6 +226,7 @@ service openstack-cinder-volume stop
 5. Start the cinder-volume service.
 ```
 /usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf --logfile /var/log/cinder/volume.log &>/dev/null
+(NOTE:To stop the cinder-volume process, which is started using the above command, plese use 'kill')
 ```
 6. Setup the volume-types and volume-type to volume-backend association.
 
