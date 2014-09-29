@@ -18,7 +18,7 @@ volumes and create/delete snapshots, etc.
 3. Requirements
 ============
 
-1. EMC ViPR version 2.0 is required. Refer to the EMC ViPR
+1. EMC ViPR version 2.1 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
 
@@ -81,50 +81,30 @@ tar -xvzf <cli_install_bundle>
 ```
 5. Run the CLI installation program.
 ```
-./Installer_viprcli.linux
-```
-6. Change directory to /opt/vipr/cli or to the directory where the CLI is installed.
-7. Note : Perform this step only when you have not provided the correct input in step 5.
-   Edit the file viprcli.profile using the vi command and set the VIPR_HOSTNAME to
-   the ViPR public virtual IP address and VIPR_PORT=4443 environment variable and
-   save the file.
-```
-# vi viprcli.profile
-#!/usr/bin/sh
-# Installation directory of ViPR CLI
-ViPR_CLI_INSTALL_DIR=/opt/ViPR/cli
-# Add the ViPR install directory to the PATH and PYTHONPATH env 
-variables
-if [ -n $ViPR_CLI_INSTALL_DIR ]
-then
-export PATH=$ViPR_CLI_INSTALL_DIR/bin:$PATH
-export PYTHONPATH=$ViPR_CLI_INSTALL_DIR/bin:$PYTHONPATH
-fi
-# USER CONFIGURABLE ViPR VARIABLES
-# ViPR Host fully qualified domain name
-ViPR_HOSTNAME=example.mydomain.com
-# ViPR Port Number
-ViPR_PORT=4443
-:wq
-```
-8. Run the source command to set the path environment variable for the ViPR
-   executable.
-```
-source ./viprcli.profile
-```
-9. From the command prompt run: viprcli -h. If the help for viprcli is displayed, then the installation is successful.
+   python setup.py install
 
-5.1.2 Copying ViPR CLI on the non supported platform
- 
-If ViPR CLI installation is not supported on the operating system where Cinder
-is installed, then perform only 4 steps from the section 5.1.1. After extracting 
-the contents of the tar file, do the following.
+   Install the ViPR CLI wherever python dist-packages or site-package folder is located at.
 
-1. cd to folder 'Linux'
-2. tar -xvf viprcli.tar.gz
-3. Copy "bin" folder to the location of your interest. For e.g /opt/storageos/cli
-4. Then perform the steps #6 to #9 from the section 5.1.1.
+        For Example:
+        /usr/local/lib/python2.7/dist-packages
 
+        or
+
+        /usr/lib/python2.6/site-packages
+
+6. Create viprcli.profile in the directory where the cinder-volume is located.(You can find that using the command which cinder-volume )in devstack.
+
+    For example if the cinder-volume is located in /usr/bin. Then place the viprcli.profile in /usr with the following contents
+
+    deployment with following contents
+
+    VIPR_CLI_INSTALL_DIR=<Home directory of the user logged in>
+
+6. From the command prompt open python prompt by typing python. Below command should be successful to indicate that the process has been correctly performed. 
+   ```
+   import viprcli
+   ```
+   
 
 5.2 Configure EMC ViPR
 ----------------------
@@ -181,8 +161,14 @@ volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
 rpc_response_timeout=300
 
 ```
-* Now, restart the cinder-volume service.
-
+* Now, stop cinder-volume service using below command
+```
+service openstack-cinder-volume stop
+```
+* Now, restart the cinder-volume service using the below command
+```
+/usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf --logfile /var/log/cinder/volume.log &>/dev/null
+```
 * Create OpenStack volume types with the cinder command
 
 ```
@@ -232,8 +218,15 @@ vipr_tenant=<Tenant>
 vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
 ```
-4. Restart the cinder-volume service.
-5. Setup the volume-types and volume-type to volume-backend association.
+4. Stop the cinder-volume.
+```
+service openstack-cinder-volume stop
+```
+5. Start the cinder-volume service.
+```
+/usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf --logfile /var/log/cinder/volume.log &>/dev/null
+```
+6. Setup the volume-types and volume-type to volume-backend association.
 
 ```
 cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance"
@@ -245,14 +238,14 @@ cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performanc
 cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
 
-6. iSCSI specific notes
+7. iSCSI specific notes
 =======================
 
 * The openstack compute host must be added to the ViPR along with its iSCSI initiator.
 * The iSCSI initiator must be associated with IP network on the ViPR.
 
 
-7. Fibre Channel Specific Notes
+8. Fibre Channel Specific Notes
 ============================
 
 * The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
@@ -288,4 +281,4 @@ License
 
 
 
-``Copyright (c) 2013 EMC Corporation.``
+``Copyright (c) 2014 EMC Corporation.``
