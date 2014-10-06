@@ -115,7 +115,6 @@ class EMCViPRDriverCommon(object):
         self.configuration = configuration
         self.configuration.append_config_values(volume_opts)
 
-        #self.check_for_vipr_cli_path()
         self.init_vipr_cli_components()
 
         self.stats = {'driver_version': '1.0',
@@ -370,8 +369,6 @@ class EMCViPRDriverCommon(object):
         ctxt = context.get_admin_context()
 
         src_snapshot_name = snapshot['name']
-        						#src_vol_ref = self.volume_api.get(context.get_admin_context(),
-                                                       #snapshot['volume_id'])
 
         src_vol_ref = volume_db.volume_get(ctxt, snapshot['volume_id'])
         src_vol_name = self._get_volume_name(src_vol_ref)
