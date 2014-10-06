@@ -212,6 +212,7 @@ vipr_cli_path=<CLI-Install-Path>
 vipr_tenant=<Tenant>
 vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
+vipr_storage_vmax=True or False
 ```
 
 ```
@@ -226,6 +227,7 @@ vipr_cli_path=<CLI-Install-Path>
 vipr_tenant=<Tenant>
 vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
+vipr_storage_vmax=True or False
 ```
 4. Stop the cinder-volume.
 ```
