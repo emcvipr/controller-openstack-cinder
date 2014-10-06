@@ -91,20 +91,29 @@ tar -xvzf <cli_install_bundle>
         or
 
         /usr/lib/python2.6/site-packages
+6. Create viprcli.pth in the above folder where CLI is installed with the following contents
+   (if your system has python 2.7):
+   ./bin/viprcli-2.1-py2.7.egg	
+   ./bin/viprcli-2.1-py2.7.egg/viprcli	
+	
+   (if your system has python 2.6):
+   ./bin/viprcli-2.1-py2.6.egg 
+   ./bin/viprcli-2.1-py2.6.egg/viprcli 
 
-6. Create viprcli.profile in the directory where the cinder-volume is located.(You can find that using the command which cinder-volume )in devstack.
+7. Create viprcli.profile in the DIRECTORY where the PARENT DIRECTORY of cinder-volume is located.(You can find that using the command which cinder-volume )
+   in devstack.
 
     For example if the cinder-volume is located in /usr/bin. Then place the viprcli.profile in /usr with the following contents
 
-    deployment with following contents
+    VIPR_CLI_INSTALL_DIR=
 
-    VIPR_CLI_INSTALL_DIR=<Home directory of the user logged in>
+    In the same directory where viprcli.profile is placed, create a folder "cookie" with permissions 777.
 
-6. From the command prompt open python prompt by typing python. Below command should be successful to indicate that the process has been correctly performed. 
+8. From the command prompt open python prompt by typing python. Below command should be successful to indicate that the process has been correctly performed. 
    ```
    import viprcli
    ```
-   
+
 
 5.2 Configure EMC ViPR
 ----------------------
@@ -143,6 +152,7 @@ vipr_tenant=<Tenant>
 vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
 vipr_cookiedir=/tmp
+vipr_storage_vmax=True or False
 ```
 
 Note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if specified.
@@ -166,9 +176,7 @@ service openstack-cinder-volume stop
 ```
 * Now, restart the cinder-volume service using the below command
 ```
-/usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf --logfile /var/log/cinder/volume.log &>/dev/null
-```
-* To stop the cinder-volume process, which is started using the above command, plese use 'kill'
+service openstack-cinder-volume start
 ```
 * Create OpenStack volume types with the cinder command
 
@@ -225,8 +233,7 @@ service openstack-cinder-volume stop
 ```
 5. Start the cinder-volume service.
 ```
-/usr/bin/cinder-volume --config-file /usr/share/cinder/cinder-dist.conf --config-file /etc/cinder/cinder.conf --logfile /var/log/cinder/volume.log &>/dev/null
-(NOTE:To stop the cinder-volume process, which is started using the above command, plese use 'kill')
+service openstack-cinder-volume start
 ```
 6. Setup the volume-types and volume-type to volume-backend association.
 
