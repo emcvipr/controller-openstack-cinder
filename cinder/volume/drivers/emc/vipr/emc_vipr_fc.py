@@ -57,7 +57,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
-        self.common.create_volume_from_snapshot(snapshot, volume)
+        self.common.create_volume_from_snapshot(snapshot, volume, self.db)
 
     def extend_volume(self, volume, new_size):
         """expands the size of the volume."""
@@ -69,7 +69,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
 
     def create_snapshot(self, snapshot):
         """Creates a snapshot."""
-        self.common.create_snapshot(snapshot)
+        self.common.create_snapshot(snapshot, self.db)
 
     def delete_snapshot(self, snapshot):
         """Deletes a snapshot."""

@@ -55,12 +55,12 @@ volume_opts = [
     cfg.StrOpt('vipr_varray',
                default=None,
                help='Virtual Array to utilize within the EMC ViPR Instance'),
-    cfg.StrOpt('vipr_cli_path',
-               default="/opt/storageos/cli/bin",
-               help='The system path where ViPR CLI is installed'),
     cfg.StrOpt('vipr_cookiedir',
                default='/tmp',
-               help='directory to store temporary cookies, defaults to /tmp')
+               help='directory to store temporary cookies, defaults to /tmp'),
+    cfg.StrOpt('vipr_storage_vmax',
+               default='False',
+               help='True | False to indicate if the storage array in ViPR is VMAX')
 ]
 
 CONF = cfg.CONF
@@ -74,7 +74,7 @@ def retry_wrapper(func):
         global AUTHENTICATED
         retry = False
 
-        from common import SOSError
+        from viprcli.common import SOSError
 
         try:
             return func(*args, **kwargs)
@@ -115,7 +115,6 @@ class EMCViPRDriverCommon(object):
         self.configuration = configuration
         self.configuration.append_config_values(volume_opts)
 
-        self.check_for_vipr_cli_path()
         self.init_vipr_cli_components()
 
         self.stats = {'driver_version': '1.0',
@@ -130,31 +129,17 @@ class EMCViPRDriverCommon(object):
 
         self.volume_api = cinder_volume.API()
 
-    def check_for_vipr_cli_path(self):
-        if (self.configuration.vipr_cli_path is None):
-            message = "vipr_cli_path is not set in cinder configuration"
-            raise exception.VolumeBackendAPIException(data=message)
-
-        if(os.path.exists(self.configuration.vipr_cli_path)):
-            sys.path.append(self.configuration.vipr_cli_path)
-        else:
-            message = self.configuration.vipr_cli_path + " path does not" + \
-                " exist in the system. Please check/add/change" + \
-                " vipr_cli_path" + \
-                " in cinder configuration with valid ViPR" + \
-                " CLI installation path"
-            raise exception.VolumeBackendAPIException(data=message)
 
     def init_vipr_cli_components(self):
-        import common as vipr_utils
+        import viprcli.common as vipr_utils
         vipr_utils.COOKIE = None
 
-        from exportgroup import ExportGroup
-        from host import Host
-        from hostinitiators import HostInitiator
-        from snapshot import Snapshot
-        from virtualarray import VirtualArray
-        from volume import Volume
+        from viprcli.exportgroup import ExportGroup
+        from viprcli.host import Host
+        from viprcli.hostinitiators import HostInitiator
+        from viprcli.snapshot import Snapshot
+        from viprcli.virtualarray import VirtualArray
+        from viprcli.volume import Volume
 
         # instantiate a few vipr cli objects for later use
         self.volume_obj = Volume(self.configuration.vipr_hostname,
@@ -203,7 +188,7 @@ class EMCViPRDriverCommon(object):
 
     def authenticate_user(self):
         global AUTHENTICATED
-        from authentication import Authentication
+        from viprcli.authentication import Authentication
         # we should check to see if we are already authenticated before blindly
         # doing it again
         if (AUTHENTICATED is False):
@@ -223,7 +208,7 @@ class EMCViPRDriverCommon(object):
         name = self._get_volume_name(vol)
         size = int(vol['size']) * 1073741824
 
-        from common import SOSError
+        from viprcli.common import SOSError
         vpool = self._get_vpool(vol)
         self.vpool = vpool['ViPR:VPOOL']
 
@@ -254,7 +239,7 @@ class EMCViPRDriverCommon(object):
 
         self.authenticate_user()
         name = self._get_volume_name(vol)
-        from common import SOSError
+        from viprcli.common import SOSError
 
         # first, get the current tags that start with the OPENSTACK_TAG
         # eyecatcher
@@ -330,7 +315,7 @@ class EMCViPRDriverCommon(object):
         name = self._get_volume_name(vol)
         srcname = self._get_volume_name(src_vref)
         number_of_volumes = 1
-        from common import SOSError
+        from viprcli.common import SOSError
 
         try:
             res = self.volume_obj.clone(
@@ -353,9 +338,9 @@ class EMCViPRDriverCommon(object):
         """expands the volume to new_size specified."""
         self.authenticate_user()
         volume_name = self._get_volume_name(vol)
-        import common as vipr_utils
+        import viprcli.common as vipr_utils
         size_in_bytes = vipr_utils.to_bytes(str(new_size) + "G")
-        from common import SOSError
+        from viprcli.common import SOSError
 
         try:
             self.volume_obj.expand(
@@ -374,16 +359,22 @@ class EMCViPRDriverCommon(object):
                 raise e
 
     @retry_wrapper
-    def create_volume_from_snapshot(self, snapshot, volume):
+    def create_volume_from_snapshot(self, snapshot, volume, volume_db):
         """Creates volume from given snapshot ( snapshot clone to volume )."""
         self.authenticate_user()
+
+        if self.configuration.vipr_storage_vmax == 'True':
+            self.create_cloned_volume(volume, snapshot)
+            return
+        ctxt = context.get_admin_context()
+
         src_snapshot_name = snapshot['name']
-        src_vol_ref = self.volume_api.get(context.get_admin_context(),
-                                                       snapshot['volume_id'])
+
+        src_vol_ref = volume_db.volume_get(ctxt, snapshot['volume_id'])
         src_vol_name = self._get_volume_name(src_vol_ref)
         new_volume_name = self._get_volume_name(volume)
         number_of_volumes = 1
-        from common import SOSError
+        from viprcli.common import SOSError
 
         try:
             self.volume_obj.clone(
@@ -409,7 +400,7 @@ class EMCViPRDriverCommon(object):
     def delete_volume(self, vol):
         self.authenticate_user()
         name = self._get_volume_name(vol)
-        from common import SOSError
+        from viprcli.common import SOSError
         try:
             self.volume_obj.delete(
                 self.configuration.vipr_tenant +
@@ -434,8 +425,8 @@ class EMCViPRDriverCommon(object):
 
     @retry_wrapper
     def list_volume(self):
-        import common as vipr_utils
-        from common import SOSError
+        import viprcli.common as vipr_utils
+        from viprcli.common import SOSError
         try:
             uris = self.volume_obj.list_volumes(
                 self.configuration.vipr_tenant +
@@ -453,9 +444,17 @@ class EMCViPRDriverCommon(object):
             raise e
 
     @retry_wrapper
-    def create_snapshot(self, snapshot):
+    def create_snapshot(self, snapshot, volume_db):
         self.authenticate_user()
-        from common import SOSError
+
+        if self.configuration.vipr_storage_vmax == 'True':
+            ctxt = context.get_admin_context()
+            volume_id = snapshot['volume_id']
+            volume = volume_db.volume_get(ctxt, volume_id)
+            self.create_cloned_volume(snapshot, volume)
+            return
+
+        from viprcli.common import SOSError
         try:
             snapshotname = snapshot['name']
             vol = snapshot['volume']
@@ -498,8 +497,13 @@ class EMCViPRDriverCommon(object):
     @retry_wrapper
     def delete_snapshot(self, snapshot):
         self.authenticate_user()
+
+        if self.configuration.vipr_storage_vmax == 'True':
+            self.delete_volume(snapshot)
+            return
+
         snapshotname = snapshot['name']
-        from common import SOSError
+        from viprcli.common import SOSError
         try:
             vol = snapshot['volume']
             volumename = self._get_volume_name(vol)
@@ -546,7 +550,7 @@ class EMCViPRDriverCommon(object):
                               initiatorPorts,
                               hostname):
 
-        from common import SOSError
+        from viprcli.common import SOSError
 
         try:
             self.authenticate_user()
@@ -641,7 +645,7 @@ class EMCViPRDriverCommon(object):
                              initiatorNodes,
                              initiatorPorts,
                              hostname):
-        from common import SOSError
+        from viprcli.common import SOSError
         try:
             self.authenticate_user()
             volumename = self._get_volume_name(volume)
@@ -855,8 +859,8 @@ class EMCViPRDriverCommon(object):
         """Retrieve stats info."""
         LOG.debug(_("Updating volume stats"))
         self.authenticate_user()
-        import common as vipr_utils
-        from common import SOSError
+        import viprcli.common as vipr_utils
+        from viprcli.common import SOSError
 
         try:
             vols = self.volume_obj.list_volumes(
