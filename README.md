@@ -2,8 +2,8 @@
 ============
 
 This guide explains how to install, configure, and make use of the EMC ViPR
-Cinder Driver. The driver works with following releases of Openstack.
-1. Icehouse
+Cinder Driver. The driver works with Icehouse release of Openstack.
+
 
 
 2. Overview
@@ -37,8 +37,9 @@ The following operations are supported:
 * Copy image to volume.
 * Copy volume to image.
 * Clone volume.
-* Create volume from snapshot.
 * Extend volume.
+* Create volume from snapshot.
+
 
 
 
@@ -93,14 +94,16 @@ Before you begin
   ```
    
 6. Create viprcli.pth in the above folder where CLI is installed with the following contents
+   ```
    (if your system has python 2.7):
    ./bin/viprcli-2.1-py2.7.egg	
    ./bin/viprcli-2.1-py2.7.egg/viprcli	
-	
+   	
    (if your system has python 2.6):
    ./bin/viprcli-2.1-py2.6.egg 
    ./bin/viprcli-2.1-py2.6.egg/viprcli 
-
+   ```
+   
 7. Create viprcli.profile in the DIRECTORY where the PARENT DIRECTORY of cinder-volume is located.(You can find that using the command which cinder-volume )
    in devstack.
 
