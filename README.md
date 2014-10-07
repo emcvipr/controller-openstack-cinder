@@ -60,16 +60,15 @@ Before you begin
 
 1. Log in to the Linux server as root.
 2. Create a temporary directory to download the CLI installer.
-  ```
-  mkdir cli/temp
-  cd cli/temp
+```
+mkdir cli/temp
+cd cli/temp
   ```
 3. Either point your browser to https://<FQDN>:4443/cli or run the wget command
    to retrieve the ViPR CLI installation bundle:
 ```
 wget https://<FQDN>:4443/cli
 ```
-
    For sites with self-signed certificates or where issues are detected, optionally use
    http://<ViPR_virtual_IP>:9998/cli only when you are inside a trusted
    network. <ViPR_virtual_IP> is the ViPR public virtual IP address, also known as the
