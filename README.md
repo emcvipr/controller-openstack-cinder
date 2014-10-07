@@ -227,47 +227,47 @@ Add/modify the following entries if you are planning to use multiple back-end dr
     vipr_varray=<ViPR-Virtual-Array-Name>
     vipr_storage_vmax=True or False
     ```
-4. Stop the cinder-volume.
+  4. Stop the cinder-volume.
+    ```
+    service openstack-cinder-volume stop
+    ```
+  5. Start the cinder-volume service.
+    ```
+    service openstack-cinder-volume start
+    ```
+  6. Setup the volume-types and volume-type to volume-backend association.
+
+    ```
+    cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance"
+    cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance" set ViPR:VPOOL="High Performance"
+    cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance" set volume_backend_name=EMCViPRISCSIDriver
+    cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance FC"
+    cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set ViPR:VPOOL="High Performance FC"
+    cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set volume_backend_name=EMCViPRFCDriver
+    cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
-service openstack-cinder-volume stop
-```
-5. Start the cinder-volume service.
-```
-service openstack-cinder-volume start
-```
-6. Setup the volume-types and volume-type to volume-backend association.
 
-```
-cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance"
-cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance" set ViPR:VPOOL="High Performance"
-cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance" set volume_backend_name=EMCViPRISCSIDriver
-cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance FC"
-cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set ViPR:VPOOL="High Performance FC"
-cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set volume_backend_name=EMCViPRFCDriver
-cinder --os-username admin --os-tenant-name admin extra-specs-list
-```
+  7. iSCSI specific notes
+  =======================
 
-7. iSCSI specific notes
-=======================
-
-* The openstack compute host must be added to the ViPR along with its iSCSI initiator.
-* The iSCSI initiator must be associated with IP network on the ViPR.
+  * The openstack compute host must be added to the ViPR along with its iSCSI initiator.
+  * The iSCSI initiator must be associated with IP network on the ViPR.
 
 
-8. Fibre Channel Specific Notes
-============================
+  8. Fibre Channel Specific Notes
+  ============================
 
-* The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
+  * The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
 
-* There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations automatically as part of the provisioning process
+  * There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations automatically as part of the provisioning process
 
 
-* If you are running an older version of OpenStack, you may need to add the following line within the /etc/cinder/rootwrap.d/volume.filters file, to enable sg_scan to run under rootwrap.
+  * If you are running an older version of OpenStack, you may need to add the following line within the /etc/cinder/rootwrap.d/volume.filters file, to enable sg_scan to run under rootwrap.
 
-```
-   sg_scan: CommandFilter, sc_scan, root  
+    ```
+    sg_scan: CommandFilter, sc_scan, root  
 
-```
+    ```
 
 
 
