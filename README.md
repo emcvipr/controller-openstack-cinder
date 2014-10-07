@@ -106,7 +106,9 @@ Before you begin
 
     For example if the cinder-volume is located in /usr/bin. Then place the viprcli.profile in /usr with the following contents
 
+    ```
     VIPR_CLI_INSTALL_DIR=
+    ```
 
     In the same directory where viprcli.profile is placed, create a folder "cookie" with permissions 777.
 
@@ -156,9 +158,9 @@ The EMC ViPR environment must meet specific configuration requirements to suppor
   vipr_storage_vmax=True or False
   ```
 
-Note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if specified.
+  Note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if specified.
 
-Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line above with:
+  Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line above with:
 
   ```
   volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
