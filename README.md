@@ -25,7 +25,6 @@ volumes and create/delete snapshots, etc.
 
 4. Supported Operations
 ====================
-
 The following operations are supported:
 * Create volume.
 * Delete volume.
