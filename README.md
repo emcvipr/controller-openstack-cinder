@@ -60,10 +60,10 @@ Before you begin
 
 1. Log in to the Linux server as root.
 2. Create a temporary directory to download the CLI installer.
-     ```
-     mkdir cli/temp
-     cd cli/temp
-     ```
+  ```
+  mkdir cli/temp
+  cd cli/temp
+  ```
 3. Either point your browser to https://<FQDN>:4443/cli or run the wget command
    to retrieve the ViPR CLI installation bundle:
   ```
