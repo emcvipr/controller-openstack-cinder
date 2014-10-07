@@ -61,6 +61,8 @@ Before you begin
 2. Create a temporary directory to download the CLI installer.
   ```
   mkdir cli/temp
+  ```
+  ```
   cd cli/temp
   ```
 3. Either point your browser to https://<FQDN>:4443/cli or run the wget command
@@ -84,9 +86,13 @@ Before you begin
   Install the ViPR CLI wherever python dist-packages or site-package folder is located at.
 
   For Example:
+  ```
   /usr/local/lib/python2.7/dist-packages
+  ```
   or
+  ```
   /usr/lib/python2.6/site-packages
+  ```
    
 6. Create viprcli.pth in the above folder where CLI is installed with the following contents
    (if your system has python 2.7):
