@@ -81,7 +81,7 @@ tar -xvzf <cli_install_bundle>
 ```
 5. Run the CLI installation program.
 ```
-   python setup.py install
+python setup.py install
 ```
    Install the ViPR CLI wherever python dist-packages or site-package folder is located at.
 
