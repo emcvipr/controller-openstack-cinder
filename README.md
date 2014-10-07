@@ -22,7 +22,6 @@ volumes and create/delete snapshots, etc.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
 
 
-
 4. Supported Operations
 ====================
 The following operations are supported:
@@ -37,8 +36,6 @@ The following operations are supported:
 * Copy volume to image.
 * Clone volume.
 * Extend volume.
-* Create volume from snapshot.
-
 
 
 
