@@ -249,8 +249,9 @@ Add/modify the following entries if you are planning to use multiple back-end dr
 
   7. iSCSI specific notes
   =======================
-    * The openstack compute host must be added to the ViPR along with its iSCSI initiator.
-    * The iSCSI initiator must be associated with IP network on the ViPR.
+* The openstack compute host must be added to the ViPR along with its iSCSI initiator.
+* The iSCSI initiator must be associated with IP network on the ViPR.
+
 
   8. Fibre Channel Specific Notes
   ============================
