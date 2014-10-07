@@ -36,6 +36,8 @@ The following operations are supported:
 * Copy volume to image.
 * Clone volume.
 * Extend volume.
+* Create volume from snapshot.
+* 
 
 
 
