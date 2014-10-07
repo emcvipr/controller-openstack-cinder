@@ -75,19 +75,19 @@ Before you begin
    network vip. The CLI installation bundle is downloaded to the current directory.
    
 4. Use tar to extract the CLI and its support files from the installation bundle.
-```
-tar -xvzf <cli_install_bundle>
-```
+  ```
+  tar -xvzf <cli_install_bundle>
+  ```
 5. Run the CLI installation program.
-```
-python setup.py install
-```
-   Install the ViPR CLI wherever python dist-packages or site-package folder is located at.
+  ```
+  python setup.py install
+  ```
+  Install the ViPR CLI wherever python dist-packages or site-package folder is located at.
 
-   For Example:
-   /usr/local/lib/python2.7/dist-packages
-   or
-   /usr/lib/python2.6/site-packages
+  For Example:
+  /usr/local/lib/python2.7/dist-packages
+  or
+  /usr/lib/python2.6/site-packages
    
 6. Create viprcli.pth in the above folder where CLI is installed with the following contents
    (if your system has python 2.7):
