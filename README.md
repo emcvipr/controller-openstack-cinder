@@ -192,41 +192,41 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 --------------------------------------------------------
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
-1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
-2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
- ```
- enabled_backends=viprdriver-iscsi,viprdriver-fc
- ```
-3.	Add the following at the end of the file; please note that each section is named as in #2 above.
-```
-[viprdriver-iscsi]
-volume_driver=cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRISCSIDriver
-volume_backend_name=EMCViPRISCSIDriver
-vipr_hostname=<ViPR Host Name>
-vipr_port=4443
-vipr_username=<username>
-vipr_password=<password>
-vipr_cli_path=<CLI-Install-Path>
-vipr_tenant=<Tenant>
-vipr_project=<ViPR-Project-Name>
-vipr_varray=<ViPR-Virtual-Array-Name>
-vipr_storage_vmax=True or False
-```
+  1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
+  2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
+    ```
+    enabled_backends=viprdriver-iscsi,viprdriver-fc
+    ```
+  3.	Add the following at the end of the file; please note that each section is named as in #2 above.
+    ```
+    [viprdriver-iscsi]
+    volume_driver=cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRISCSIDriver
+    volume_backend_name=EMCViPRISCSIDriver
+    vipr_hostname=<ViPR Host Name>
+    vipr_port=4443
+    vipr_username=<username>
+    vipr_password=<password>
+    vipr_cli_path=<CLI-Install-Path>
+    vipr_tenant=<Tenant>
+    vipr_project=<ViPR-Project-Name>
+    vipr_varray=<ViPR-Virtual-Array-Name>
+    vipr_storage_vmax=True or False
+    ```
 
-```
-[viprdriver-fc]
-volume_driver=cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
-volume_backend_name=EMCViPRFCDriver
-vipr_hostname=<ViPR Host Name>
-vipr_port=4443
-vipr_username=<username>
-vipr_password=<password>
-vipr_cli_path=<CLI-Install-Path>
-vipr_tenant=<Tenant>
-vipr_project=<ViPR-Project-Name>
-vipr_varray=<ViPR-Virtual-Array-Name>
-vipr_storage_vmax=True or False
-```
+    ```
+    [viprdriver-fc]
+    volume_driver=cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
+    volume_backend_name=EMCViPRFCDriver
+    vipr_hostname=<ViPR Host Name>
+    vipr_port=4443
+    vipr_username=<username>
+    vipr_password=<password>
+    vipr_cli_path=<CLI-Install-Path>
+    vipr_tenant=<Tenant>
+    vipr_project=<ViPR-Project-Name>
+    vipr_varray=<ViPR-Virtual-Array-Name>
+    vipr_storage_vmax=True or False
+    ```
 4. Stop the cinder-volume.
 ```
 service openstack-cinder-volume stop
