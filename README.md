@@ -82,15 +82,14 @@ tar -xvzf <cli_install_bundle>
 5. Run the CLI installation program.
 ```
    python setup.py install
-
+```
    Install the ViPR CLI wherever python dist-packages or site-package folder is located at.
 
-        For Example:
-        /usr/local/lib/python2.7/dist-packages
-
-        or
-
-        /usr/lib/python2.6/site-packages
+   For Example:
+   /usr/local/lib/python2.7/dist-packages
+   or
+   /usr/lib/python2.6/site-packages
+   
 6. Create viprcli.pth in the above folder where CLI is installed with the following contents
    (if your system has python 2.7):
    ./bin/viprcli-2.1-py2.7.egg	
@@ -195,7 +194,7 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
 1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
-2.	 ìenabled_backendsî will be commented by default, please un-comment and add the multiple back-end names as below. 
+2.	 ‚Äúenabled_backends‚Äù will be commented by default, please un-comment and add the multiple back-end names as below. 
  ```
  enabled_backends=viprdriver-iscsi,viprdriver-fc
  ```
