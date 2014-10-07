@@ -143,53 +143,53 @@ The EMC ViPR environment must meet specific configuration requirements to suppor
 
 * Modify /etc/cinder/cinder.conf by adding the following lines, substituting values for your environment:
 
-```
-volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRISCSIDriver
-vipr_hostname=<ViPR-Host-Name>
-vipr_port=4443
-vipr_username=<username>
-vipr_password=<password>
-vipr_tenant=<Tenant> 
-vipr_project=<ViPR-Project-Name>
-vipr_varray=<ViPR-Virtual-Array-Name>
-vipr_cookiedir=/tmp
-vipr_storage_vmax=True or False
-```
+  ```
+  volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_iscsi.EMCViPRISCSIDriver
+  vipr_hostname=<ViPR-Host-Name>
+  vipr_port=4443
+  vipr_username=<username>
+  vipr_password=<password>
+  vipr_tenant=<Tenant> 
+  vipr_project=<ViPR-Project-Name>
+  vipr_varray=<ViPR-Virtual-Array-Name>
+  vipr_cookiedir=/tmp
+  vipr_storage_vmax=True or False
+  ```
 
 Note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if specified.
 
 Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line above with:
 
-```
-volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
+  ```
+  volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
 
-```
+  ```
 
 * Modify the rpc_response_timeout value in /etc/cinder/cinder.conf to at least 5 minutes. if this value does not already exist within the cinder.conf file, please add it
 
-```
-rpc_response_timeout=300
+  ```
+  rpc_response_timeout=300
 
-```
+  ```
 * Now, stop cinder-volume service using below command
-```
-service openstack-cinder-volume stop
-```
+  ```
+  service openstack-cinder-volume stop
+  ```
 * Now, restart the cinder-volume service using the below command
-```
-service openstack-cinder-volume start
-```
+  ```
+  service openstack-cinder-volume start
+  ```
 * Create OpenStack volume types with the cinder command
 
-```
-cinder --os-username admin --os-tenant-name admin type-create <typename>
-```
+  ```
+  cinder --os-username admin --os-tenant-name admin type-create <typename>
+  ```
 
 * Map the OpenStack volume type to the ViPR Virtual Pool with the cinder command
 
-```
-cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:VPOOL=<ViPR-PoolName>
-```
+  ```
+  cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:VPOOL=<ViPR-PoolName>
+  ```
 
 5.4 Notes to Configure both FC and iSCSI back-end drivers
 --------------------------------------------------------
