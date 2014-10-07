@@ -171,11 +171,11 @@ Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line abov
   rpc_response_timeout=300
 
   ```
-* Now, stop cinder-volume service using below command
+* Now, stop cinder-volume service using following command
   ```
   service openstack-cinder-volume stop
   ```
-* Now, restart the cinder-volume service using the below command
+* Now, restart the cinder-volume service using the following command
   ```
   service openstack-cinder-volume start
   ```
@@ -196,7 +196,7 @@ Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line abov
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
   1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
-  2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
+  2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as following. 
     ```
     enabled_backends=viprdriver-iscsi,viprdriver-fc
     ```
