@@ -88,9 +88,7 @@ Before you begin
   For Example:
   ```
   /usr/local/lib/python2.7/dist-packages
-  ```
   or
-  ```
   /usr/lib/python2.6/site-packages
   ```
    
