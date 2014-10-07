@@ -249,24 +249,21 @@ Add/modify the following entries if you are planning to use multiple back-end dr
 
   7. iSCSI specific notes
   =======================
-
-    * The openstack compute host must be added to the ViPR along with its iSCSI initiator.
-    * The iSCSI initiator must be associated with IP network on the ViPR.
+  * The openstack compute host must be added to the ViPR along with its iSCSI initiator.
+  * The iSCSI initiator must be associated with IP network on the ViPR.
 
   8. Fibre Channel Specific Notes
   ============================
+  * The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
 
-    * The OpenStack compute host must be attached to a VSAN or fabric discovered by ViPR.
+  * There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations automatically as part of the provisioning process.
 
-    * There is no need to perform any SAN zoning operations. EMC ViPR will perform the necessary operations automatically as part of the provisioning process.
+  * If you are running an older version of OpenStack, you may need to add the following line within the /etc/cinder/rootwrap.d/volume.filters file, to enable sg_scan to run under rootwrap.
 
+    ```
+    sg_scan: CommandFilter, sc_scan, root  
 
-    * If you are running an older version of OpenStack, you may need to add the following line within the /etc/cinder/rootwrap.d/volume.filters file, to enable sg_scan to run under rootwrap.
-
-      ```
-      sg_scan: CommandFilter, sc_scan, root  
-
-      ```
+    ```
 
 
 
