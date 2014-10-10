@@ -162,6 +162,8 @@ The EMC ViPR environment must meet specific configuration requirements to suppor
   Note 1: The value for vipr_cookiedir defaults to /tmp but can be overridden if specified.
 
   Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line above with:
+  
+  Note 3: Please set vipr_storage_vmax to True, if the ViPR vpool has VMAX or VPLEX(with VMAX as backend) as the backing storage.
 
   ```
   volume_driver = cinder.volume.drivers.emc.vipr.emc_vipr_fc.EMCViPRFCDriver
