@@ -2,7 +2,7 @@
 ============
 
 This guide explains how to install, configure, and make use of the EMC ViPR
-Cinder Driver. The driver works with Icehouse release of Openstack.
+Cinder Driver. The driver works with Icehouse and Juno releases of Openstack.
 
 
 
