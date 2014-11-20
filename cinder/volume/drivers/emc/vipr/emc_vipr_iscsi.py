@@ -154,7 +154,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             properties['auth_username'] = auth_username
             properties['auth_password'] = auth_secret
 
-        LOG.debug(_("ISCSI properties: %s") % (properties))
+        #LOG.debug(_("ISCSI properties: %s") % (properties))
         return {
             'driver_volume_type': 'iscsi',
             'data': properties
@@ -188,5 +188,5 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
     def update_volume_stats(self):
         """Retrieve stats info from virtual pool/virtual array."""
-        LOG.debug(_("Updating volume stats"))
+        LOG.debug("Updating volume stats")
         self._stats = self.common.update_volume_stats()

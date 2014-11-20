@@ -726,7 +726,7 @@ class EMCViPRDriverCommon(object):
         itls = []
         for x in xrange(10):
             exports = self.volume_obj.get_exports_by_uri(vol_uri)
-            LOG.debug(_("Volume exports: %s") % exports)
+            #LOG.debug(_("Volume exports: %s") % exports)
             for itl in exports['itl']:
                 itl_port = itl['initiator']['port']
                 if (itl_port in initiator_ports):
@@ -857,7 +857,7 @@ class EMCViPRDriverCommon(object):
     @retry_wrapper
     def update_volume_stats(self):
         """Retrieve stats info."""
-        LOG.debug(_("Updating volume stats"))
+        LOG.debug("Updating volume stats")
         self.authenticate_user()
         import viprcli.common as vipr_utils
         from viprcli.common import SOSError

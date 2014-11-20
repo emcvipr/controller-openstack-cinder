@@ -149,7 +149,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
             properties['auth_username'] = auth_username
             properties['auth_password'] = auth_secret
 
-        LOG.debug(_("FC properties: %s") % (properties))
+        #LOG.debug(_("FC properties: %s") % (properties))
         return {
             'driver_volume_type': 'fibre_channel',
             'data': properties
@@ -172,7 +172,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
                 'data': {'target_wwn': target_wwns,
                          'initiator_target_map': initiator_target_map}}
 
-        LOG.debug(_('Return FC data: %(data)s.') % {'data': data})
+        #LOG.debug(_('Return FC data: %(data)s.') % {'data': data})
         return data
 
     def _build_initiator_target_map(self, itls, connector):
@@ -215,5 +215,5 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
 
     def update_volume_stats(self):
         """Retrieve stats info from virtual pool/virtual array."""
-        LOG.debug(_("Updating volume stats"))
+        LOG.debug("Updating volume stats")
         self._stats = self.common.update_volume_stats()
