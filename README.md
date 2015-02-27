@@ -230,7 +230,7 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
 1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
-2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
+2.	 Â“enabled_backendsÂ” will be commented by default, please un-comment and add the multiple back-end names as below. 
  ```
  enabled_backends=viprdriver-iscsi,viprdriver-fc,viprdriver-scaleio
  ```
@@ -373,7 +373,7 @@ following text to the scaleio.filters file
     "consistencygroup:get_all": "",
 ```
 
-11. Names of resources in backend stroage 
+11. Names of resources in backend storage 
 =========================================
 * All the resources like Volume, Consistency Group, Snapshot and 
   Consistency Group Snapshot will use the display name in openstack 
