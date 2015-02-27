@@ -1,5 +1,4 @@
-
-# Copyright (c) 2013 EMC Corporation
+# Copyright (c) 2014 EMC Corporation
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -23,8 +22,20 @@ import re
 
 from cinder.openstack.common import log as logging
 from cinder.volume import driver
+from cinder.volume.drivers.emc.vipr import common as vipr_common
 
-from cinder.volume.drivers.emc.vipr import emc_vipr_driver_common
+try:
+    # new utilities introduced in Juno
+    from cinder.zonemanager.utils import AddFCZone
+    from cinder.zonemanager.utils import RemoveFCZone
+except ImportError:
+    # AddFCZone or RemoveFCZone are not ready
+    # Define them for backward compatibility
+    def AddFCZone(func):
+        return func
+
+    def RemoveFCZone(func):
+        return func
 
 LOG = logging.getLogger(__name__)
 
@@ -37,7 +48,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         self.common = self._get_common_driver()
 
     def _get_common_driver(self):
-        return emc_vipr_driver_common.EMCViPRDriverCommon(
+        return vipr_common.EMCViPRDriverCommon(
             protocol='FC',
             default_backend_name=self.__class__.__name__,
             configuration=self.configuration)
@@ -47,17 +58,18 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
 
     def create_volume(self, volume):
         """Creates a Volume."""
-        self.common.create_volume(volume)
-        self.common.setTags(volume)
+        self.common.create_volume(volume, self)
+        self.common.set_volume_tags(volume)
 
     def create_cloned_volume(self, volume, src_vref):
         """Creates a cloned Volume."""
         self.common.create_cloned_volume(volume, src_vref)
-        self.common.setTags(volume)
+        self.common.set_volume_tags(volume)
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
         self.common.create_volume_from_snapshot(snapshot, volume, self.db)
+        self.common.set_volume_tags(volume)
 
     def extend_volume(self, volume, new_size):
         """expands the size of the volume."""
@@ -87,10 +99,27 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         """Driver exntry point to remove an export for a volume."""
         pass
 
+    def create_consistencygroup(self, context, group):
+        """Creates a consistencygroup."""        
+        return self.common.create_consistencygroup(context, group)
+
+    def delete_consistencygroup(self, context, group):
+        """Deletes a consistency group."""
+        return self.common.delete_consistencygroup(self, context, group)
+        
+    def create_cgsnapshot(self, context, cgsnapshot):
+        """Creates a cgsnapshot."""
+        return self.common.create_cgsnapshot(self, context, cgsnapshot)
+
+    def delete_cgsnapshot(self, context, cgsnapshot):
+        """Deletes a cgsnapshot."""
+        return self.common.delete_cgsnapshot(self, context, cgsnapshot)
+
     def check_for_export(self, context, volume_id):
         """Make sure volume is exported."""
         pass
 
+    @AddFCZone
     def initialize_connection(self, volume, connector):
         """Initializes the connection and returns connection info.
 
@@ -149,12 +178,14 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
             properties['auth_username'] = auth_username
             properties['auth_password'] = auth_secret
 
-        #LOG.debug(_("FC properties: %s") % (properties))
+        LOG.debug('FC properties: ')
+        LOG.debug(properties)
         return {
             'driver_volume_type': 'fibre_channel',
             'data': properties
         }
 
+    @RemoveFCZone
     def terminate_connection(self, volume, connector, **kwargs):
         """Driver entry point to detach a volume from an instance."""
         protocol = 'FC'
@@ -166,13 +197,21 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
                                                 initPorts,
                                                 hostname)
 
-        target_wwns, initiator_target_map = self._build_initiator_target_map(
-            itls, connector)
-        data = {'driver_volume_type': 'fibre_channel',
-                'data': {'target_wwn': target_wwns,
-                         'initiator_target_map': initiator_target_map}}
+        volumes_count = self.common.get_exports_count_by_initiators(initPorts)
+        if volumes_count > 0:
+            #return empty data
+            data = {'driver_volume_type': 'fibre_channel', 'data': {}}
+        else:
+            target_wwns, initiator_target_map = \
+                self._build_initiator_target_map(itls, connector)
+            data = {
+                'driver_volume_type': 'fibre_channel',
+                'data': {
+                    'target_wwn': target_wwns,
+                    'initiator_target_map': initiator_target_map}}
 
-        #LOG.debug(_('Return FC data: %(data)s.') % {'data': data})
+        LOG.debug('Return FC data: ')
+        LOG.debug(data)
         return data
 
     def _build_initiator_target_map(self, itls, connector):

@@ -1,5 +1,4 @@
-
-# Copyright (c) 2013 EMC Corporation
+# Copyright (c) 2014 EMC Corporation
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -21,7 +20,7 @@ Driver for EMC ViPR iSCSI volumes.
 
 from cinder.openstack.common import log as logging
 from cinder.volume import driver
-from cinder.volume.drivers.emc.vipr import emc_vipr_driver_common
+from cinder.volume.drivers.emc.vipr import common as vipr_common
 
 LOG = logging.getLogger(__name__)
 
@@ -34,7 +33,7 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         self.common = self._get_common_driver()
 
     def _get_common_driver(self):
-        return emc_vipr_driver_common.EMCViPRDriverCommon(
+        return vipr_common.EMCViPRDriverCommon(
             protocol='iSCSI',
             default_backend_name=self.__class__.__name__,
             configuration=self.configuration)
@@ -44,17 +43,18 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
 
     def create_volume(self, volume):
         """Creates a Volume."""
-        self.common.create_volume(volume)
-        self.common.setTags(volume)
+        self.common.create_volume(volume, self)
+        self.common.set_volume_tags(volume)
 
     def create_cloned_volume(self, volume, src_vref):
         """Creates a cloned Volume."""
         self.common.create_cloned_volume(volume, src_vref)
-        self.common.setTags(volume)
+        self.common.set_volume_tags(volume)
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
         self.common.create_volume_from_snapshot(snapshot, volume, self.db)
+        self.common.set_volume_tags(volume)
 
     def extend_volume(self, volume, new_size):
         """expands the size of the volume."""
@@ -91,6 +91,22 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
         """Driver exntry point to remove an export for a volume.
         """
         pass
+
+    def create_consistencygroup(self, context, group):
+        """Creates a consistencygroup."""        
+        return self.common.create_consistencygroup(context, group)
+
+    def delete_consistencygroup(self, context, group):
+        """Deletes a consistency group."""
+        return self.common.delete_consistencygroup(self, context, group)
+        
+    def create_cgsnapshot(self, context, cgsnapshot):
+        """Creates a cgsnapshot."""
+        return self.common.create_cgsnapshot(self, context, cgsnapshot)
+
+    def delete_cgsnapshot(self, context, cgsnapshot):
+        """Deletes a cgsnapshot."""
+        return self.common.delete_cgsnapshot(self, context, cgsnapshot)
 
     def check_for_export(self, context, volume_id):
         """Make sure volume is exported."""
@@ -154,7 +170,8 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
             properties['auth_username'] = auth_username
             properties['auth_password'] = auth_secret
 
-        #LOG.debug(_("ISCSI properties: %s") % (properties))
+        LOG.debug("ISCSI properties: ")
+        LOG.debug(properties)
         return {
             'driver_volume_type': 'iscsi',
             'data': properties
