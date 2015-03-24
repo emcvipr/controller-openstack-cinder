@@ -184,6 +184,7 @@ class EMCViPRScaleIODriver(driver.VolumeDriver):
                                        properties['hostIP'])
         initiatorPorts.append(initiatorPort)
 
+        properties['serverToken'] = self.server_token
         protocol = 'scaleio'
         hostname = connector['host']
         itls = self.common.initialize_connection(volume,
