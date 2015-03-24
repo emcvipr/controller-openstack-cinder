@@ -356,7 +356,7 @@ libvirt_volume_drivers =
 scaleio=nova.virt.libvirt.scaleiolibvirtdriver.LibvirtScaleIOVolumeDriver
 ```
 * Add the same text mentioned in the previous step to the volume_drivers key.
-* Create the file scaleio.filters at the locations /etc/nova/rootwarp.d and /etc/cinder/rootwrap.d. Add the
+* Create the file scaleio.filters at the locations /etc/nova/rootwrap.d and /etc/cinder/rootwrap.d. Add the
 following text to the scaleio.filters file
 
 [Filters]drv_cfg: CommandFilter, /opt/emc/scaleio/sdc/bin/drv_cfg, root
