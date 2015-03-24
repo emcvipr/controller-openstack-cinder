@@ -373,7 +373,7 @@ following text to the scaleio.filters file
     "consistencygroup:get_all": "",
 ```
 
-11. Names of resources in backend stroage 
+11. Names of resources in backend storage 
 =========================================
 * All the resources like Volume, Consistency Group, Snapshot and 
   Consistency Group Snapshot will use the display name in openstack 
