@@ -18,7 +18,11 @@ Driver for EMC ViPR iSCSI volumes.
 
 """
 
-from cinder.openstack.common import log as logging
+try:
+    from oslo_log import log as logging
+except ImportError:
+    from cinder.openstack.common import log as logging
+
 from cinder.volume import driver
 from cinder.volume.drivers.emc.vipr import common as vipr_common
 
@@ -99,6 +103,11 @@ class EMCViPRISCSIDriver(driver.ISCSIDriver):
     def delete_consistencygroup(self, context, group):
         """Deletes a consistency group."""
         return self.common.delete_consistencygroup(self, context, group)
+    
+    
+    def update_consistencygroup(self, context, group, add_volumes, remove_volumes):
+        """Updates volumes in consistency group."""
+        return self.common.update_consistencygroup(self, context, group, add_volumes, remove_volumes)
         
     def create_cgsnapshot(self, context, cgsnapshot):
         """Creates a cgsnapshot."""

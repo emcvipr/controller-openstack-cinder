@@ -5,6 +5,7 @@ This guide explains how to install, configure, and make use of the EMC ViPR
 Cinder Driver. The driver works with following releases of Openstack.
 1. Icehouse
 2. Juno
+3. Kilo
 
 
 2. Overview
@@ -18,13 +19,15 @@ volumes and create/delete snapshots, etc.
 3. Requirements
 ============
 
-1. EMC ViPR version 2.2 is required. Refer to the EMC ViPR
+1. EMC ViPR version 2.2 SP1 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
-3. EMC ViPR 2.2 in combination with Openstack Icehouse supports ScaleIO versions 1.3 
+3. EMC ViPR 2.2 SP1 in combination with Openstack Juno supports ScaleIO versions 1.31
+   as the backend.
+4. EMC ViPR 2.2 SP1 in combination with Openstack Icehouse supports ScaleIO versions 1.3 
    and 1.31 as the backend.
-4. EMC ViPR 2.2 in combination with Openstack Juno supports consistency group and 
-   consistency group snap shots.
+5. EMC ViPR 2.2 SP1 in combination with Openstack Juno and Kilo supports consistency group and 
+   consistency group snap shots.Consistency Group update is supported in Kilo only. 
 
 
 4. Supported Operations
@@ -47,6 +50,7 @@ The following operations are supported:
 * Delete consistency group
 * Create consistency group snapshot.
 * Delete consistency group snapshot.
+* Update consistency group snapshot.
 
 
 
@@ -373,7 +377,7 @@ following text to the scaleio.filters file
     "consistencygroup:get_all": "",
 ```
 
-11. Names of resources in backend storage 
+11. Names of resources in backend stroage 
 =========================================
 * All the resources like Volume, Consistency Group, Snapshot and 
   Consistency Group Snapshot will use the display name in openstack 
@@ -399,4 +403,4 @@ License
 
 
 
-``Copyright (c) 2013 EMC Corporation.``
+``Copyright (c) 2015 EMC Corporation.``
