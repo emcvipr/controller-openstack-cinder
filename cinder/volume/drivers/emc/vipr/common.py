@@ -24,9 +24,17 @@ from oslo.config import cfg
 
 from cinder import context
 from cinder import exception
-from cinder.openstack.common import excutils
+try:
+    from oslo.utils import excutils
+except ImportError:
+    from cinder.openstack.common import excutils
+
+try:
+    from oslo_log import log as logging
+except ImportError:
+    from cinder.openstack.common import log as logging
+
 from cinder.openstack.common.gettextutils import _
-from cinder.openstack.common import log as logging
 from cinder.volume import volume_types
 
 
@@ -306,7 +314,63 @@ class EMCViPRDriverCommon(object):
                     LOG.exception(_("Consistency Group : %s creation failed") % name)
 
 
+    @retry_wrapper
+    def update_consistencygroup(self, driver, context, group, add_volumes, remove_volumes):
+        self.authenticate_user()
+        model_update = {'status': 'available'}
+        cg_name = self._get_vipr_consistency_group_name(group)        
+        parms = {}
+        add_volnames = []
+        remove_volnames = []
+        
+        try:
+            if(add_volumes):
+                for vol in add_volumes:
+                    vol_name = self._get_vipr_volume_name(vol)
+                    add_volnames.append(vol_name)
+            
+            if(remove_volumes):
+                for vol in remove_volumes:
+                    vol_name = self._get_vipr_volume_name(vol)
+                    remove_volnames.append(vol_name)
+                    
+            self.consistencygroup_obj.update(
+                cg_name,
+                self.configuration.vipr_project,
+                self.configuration.vipr_tenant,
+                add_volnames, remove_volnames, True)
+                                
+            return model_update, None, None
 
+        except vipr_utils.SOSError as e:
+            if(e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR):
+                raise vipr_utils.SOSError(
+                    vipr_utils.SOSError.SOS_FAILURE_ERR,
+                    "Consistency Group " + cg_name + ": update failed\n" + e.err_text)
+            else:
+                with excutils.save_and_reraise_exception():
+                    LOG.exception(_("Consistency Group : %s update failed") % cg_name)
+
+
+    def _get_vipr_consistency_group_name(self, cg , verbose=False):
+        tagname = "OpenStack:id:"+ cg['id']
+        rslt = vipr_utils.search_by_tag(
+            vipr_cg.ConsistencyGroup.URI_SEARCH_CONSISTENCY_GROUPS_BY_TAG.format(tagname),
+            self.configuration.vipr_hostname,
+            self.configuration.vipr_port)
+
+        if(len(rslt) > 0):
+            rsltCg = self.consistencygroup_obj.show(rslt[0],
+                self.configuration.vipr_project, self.configuration.vipr_tenant)
+
+            if(verbose == True):
+                return rsltCg['name'] , rslt[0]
+            else:
+                return rsltCg['name']
+        else:
+            raise vipr_utils.SOSError(
+                vipr_utils.SOSError.NOT_FOUND_ERR,
+                "Consistency Group "+cg['name'] + " not found")
 
     @retry_wrapper
     def delete_consistencygroup(self, driver, context, group):
@@ -485,11 +549,19 @@ class EMCViPRDriverCommon(object):
                 self.configuration.vipr_project,
                 self.configuration.vipr_tenant)
             
-            uri = self.snapshot_obj.snapshot_query('block' ,
+            uri = None
+            try:
+                uri = self.snapshot_obj.snapshot_query('block' ,
                                                    'consistency-groups' , 
                                                    resUri ,
                                                    cgsnapshot_name + '-1' )
-
+            except vipr_utils.SOSError as e:
+                if e.err_code == vipr_utils.SOSError.NOT_FOUND_ERR:
+                    uri = self.snapshot_obj.snapshot_query('block' ,
+                                                   'consistency-groups' , 
+                                                   resUri ,
+                                                   cgsnapshot_name)
+                    
             self.snapshot_obj.snapshot_delete_uri(
                 'block',
                 resUri,
@@ -527,7 +599,7 @@ class EMCViPRDriverCommon(object):
 
 
     @retry_wrapper
-    def set_tags_for_resource(self, uri , resourceId, resource):
+    def set_tags_for_resource(self, uri , resourceId, resource, exemptTags=[]):
 
         self.authenticate_user()
 
@@ -562,9 +634,17 @@ class EMCViPRDriverCommon(object):
         try:
             for prop, value in vars(resource).iteritems():
                 try:
+                    if(prop in exemptTags):
+                        continue
+
+                    if(prop.startswith("_")):
+                        prop = prop.replace("_",'',1)
+
                     # don't put the status in, it's always the status before
                     # the current transaction
-                    if ( (not prop.startswith("status")) and (value)):
+                    if ((not prop.startswith("status")
+                           and not prop.startswith("obj_status")
+                           and prop != "obj_volume") and (value)):
                         add_tags.append(
                             self.OPENSTACK_TAG +
                             ":" +
@@ -754,6 +834,7 @@ class EMCViPRDriverCommon(object):
 
         if self.configuration.vipr_storage_vmax == 'True':
             self.create_cloned_volume(snapshot, volume)
+            self.set_volume_tags(snapshot)
             return
 
         try:
@@ -792,7 +873,7 @@ class EMCViPRDriverCommon(object):
 
             self.set_tags_for_resource(
                 vipr_snap.Snapshot.URI_BLOCK_SNAPSHOTS_TAG,
-                snapshotUri, snapshot)
+                snapshotUri, snapshot, ['_volume'])
             
 
         except vipr_utils.SOSError as e:
@@ -1111,6 +1192,15 @@ class EMCViPRDriverCommon(object):
             vipr_vol.Volume.URI_SEARCH_VOLUMES_BY_TAG.format(tagname),
             self.configuration.vipr_hostname,
             self.configuration.vipr_port)
+
+        #if the result is empty, then search with the tagname as "OpenStack:obj_id"
+        #as snapshots will be having the obj_id instead of just id.
+        if(len(rslt) == 0):
+            tagname="OpenStack:obj_id:"+vol['id']
+            rslt = vipr_utils.search_by_tag(
+                vipr_vol.Volume.URI_SEARCH_VOLUMES_BY_TAG.format(tagname),
+                self.configuration.vipr_hostname,
+                self.configuration.vipr_port)
 
         if(len(rslt) > 0):
             rsltVol = self.volume_obj.show_by_uri(rslt[0])
