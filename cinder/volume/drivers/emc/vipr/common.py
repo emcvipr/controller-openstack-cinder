@@ -586,7 +586,7 @@ class EMCViPRDriverCommon(object):
 
 
     @retry_wrapper
-    def set_volume_tags(self, vol):
+    def set_volume_tags(self, vol, exemptTags=[]):
         self.authenticate_user()
         name = self._get_volume_name(vol)
 
@@ -595,7 +595,7 @@ class EMCViPRDriverCommon(object):
                                               self.configuration.vipr_project
                                               + "/" + name)
         
-        self.set_tags_for_resource(vipr_vol.Volume.URI_TAG_VOLUME, vol_uri, vol)
+        self.set_tags_for_resource(vipr_vol.Volume.URI_TAG_VOLUME, vol_uri, vol, exemptTags)
 
 
     @retry_wrapper
@@ -656,6 +656,7 @@ class EMCViPRDriverCommon(object):
         except TypeError:
             LOG.debug("Error tagging the resource properties ")
 
+
         try:
             vipr_tag.tag_resource(
                 self.configuration.vipr_hostname , 
@@ -683,14 +684,36 @@ class EMCViPRDriverCommon(object):
         number_of_volumes = 1
 
         try:
-            self.volume_obj.clone(
-                self.configuration.vipr_tenant + "/" +
-                self.configuration.vipr_project,
-                name,
-                number_of_volumes,
+            if(src_vref['consistencygroup_id']):
+                raise vipr_utils.SOSError(
+                    vipr_utils.SOSError.SOS_FAILURE_ERR,
+                    "Clone can't be taken individually on a volume" + \
+                    " that is part of a Consistency Group")
+        except AttributeError as e:
+            LOG.info("No Consistency Group associated with the volume")
+
+        try:
+            (storageresType, storageresTypename) = self.volume_obj.get_storageAttributes(
+                srcname, None, None)
+
+            resource_id = self.volume_obj.storageResource_query(storageresType,
                 srcname,
                 None,
+                None,
+                self.configuration.vipr_project,
+                self.configuration.vipr_tenant)
+
+            self.volume_obj.clone(
+                name,
+                number_of_volumes,
+                resource_id,
                 sync=True)
+
+            #detach it from the source volume immediately after creation
+            self.volume_obj.volume_clone_detach("",
+                self.configuration.vipr_tenant + "/" +
+                self.configuration.vipr_project + "/" + name, True)
+
         except vipr_utils.SOSError as e:
             if(e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR):
                 raise vipr_utils.SOSError(
@@ -747,14 +770,24 @@ class EMCViPRDriverCommon(object):
             src_vol_name, src_vol_uri = self._get_vipr_volume_name(src_vol_ref, True)
             src_snapshot_name = self._get_vipr_snapshot_name(snapshot , src_vol_uri)
 
-            self.volume_obj.clone(
-                self.configuration.vipr_tenant + "/" +
+            (storageresType, storageresTypename) = self.volume_obj.get_storageAttributes(
+                src_vol_name
+                , None
+                , src_snapshot_name)
+
+            resource_id = self.volume_obj.storageResource_query(storageresType,
+                src_vol_name,
+                None,
+                src_snapshot_name,
                 self.configuration.vipr_project,
+                self.configuration.vipr_tenant)
+
+            self.volume_obj.clone(
                 new_volume_name,
                 number_of_volumes,
-                src_vol_name,
-                src_snapshot_name,
+                resource_id,
                 sync=True)
+
         except vipr_utils.SOSError as e:
             if(e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR):
                 raise vipr_utils.SOSError(
@@ -827,14 +860,14 @@ class EMCViPRDriverCommon(object):
             if(volume['consistencygroup_id']):
                 raise vipr_utils.SOSError(
                     vipr_utils.SOSError.SOS_FAILURE_ERR,
-                    "Snapshot cant be taken individually on a volume" + \
+                    "Snapshot can't be taken individually on a volume" + \
                     " that is part of a Consistency Group")
         except AttributeError as e:
             LOG.info("No Consistency Group associated with the volume")
 
         if self.configuration.vipr_storage_vmax == 'True':
             self.create_cloned_volume(snapshot, volume)
-            self.set_volume_tags(snapshot)
+            self.set_volume_tags(snapshot, ['_volume'])
             return
 
         try:
@@ -1201,6 +1234,7 @@ class EMCViPRDriverCommon(object):
             vipr_vol.Volume.URI_SEARCH_VOLUMES_BY_TAG.format(tagname),
             self.configuration.vipr_hostname,
             self.configuration.vipr_port)
+
 
         #if the result is empty, then search with the tagname as "OpenStack:obj_id"
         #as snapshots will be having the obj_id instead of just id.
