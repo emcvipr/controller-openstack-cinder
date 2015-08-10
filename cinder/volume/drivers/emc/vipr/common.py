@@ -1176,6 +1176,15 @@ class EMCViPRDriverCommon(object):
             self.configuration.vipr_hostname,
             self.configuration.vipr_port)
 
+        #if the result is empty, then search with the tagname as "OpenStack:obj_id"
+        #as snapshots will be having the obj_id instead of just id.
+        if( (rslt is None) or (len(rslt) == 0) ):
+            tagname = "OpenStack:obj_id:"+ snapshot['id']
+            rslt = vipr_utils.search_by_tag(
+                vipr_snap.Snapshot.URI_SEARCH_SNAPSHOT_BY_TAG.format(tagname),
+                self.configuration.vipr_hostname,
+                self.configuration.vipr_port)
+
         if( (rslt is None) or (len(rslt) == 0) ):
             return snapshot['name']
         else:
