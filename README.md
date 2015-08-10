@@ -3,9 +3,8 @@
 
 This guide explains how to install, configure, and make use of the EMC ViPR
 Cinder Driver. The driver works with following releases of Openstack.
-1. Icehouse
-2. Juno
-3. Kilo
+1. Juno
+2. Kilo
 
 
 2. Overview
@@ -19,15 +18,15 @@ volumes and create/delete snapshots, etc.
 3. Requirements
 ============
 
-1. EMC ViPR version 2.2 SP1 is required. Refer to the EMC ViPR
+1. EMC ViPR version 2.3 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
-3. EMC ViPR 2.2 SP1 in combination with Openstack Juno supports ScaleIO versions 1.31
+3. EMC ViPR 2.3 in combination with Openstack Juno supports ScaleIO versions 1.31 
    as the backend.
-4. EMC ViPR 2.2 SP1 in combination with Openstack Icehouse supports ScaleIO versions 1.3 
-   and 1.31 as the backend.
-5. EMC ViPR 2.2 SP1 in combination with Openstack Juno and Kilo supports consistency group and 
-   consistency group snap shots.Consistency Group update is supported in Kilo only. 
+4. EMC ViPR 2.3 in combination with Openstack Juno supports consistency group and 
+   consistency group snap shots.
+5. EMC ViPR 2.3 in combination with Openstack Juno and Kilo supports consistency group and 
+   consistency group snap shots. Consistency Group update is supported in Kilo only.
 
 
 4. Supported Operations
@@ -47,10 +46,10 @@ The following operations are supported:
 * Create volume from snapshot.
 * Extend volume.
 * Create consistency group.
-* Delete consistency group
+* Delete consistency group.
+* Update consistency group.(KILO only)
 * Create consistency group snapshot.
 * Delete consistency group snapshot.
-* Update consistency group snapshot.
 
 
 
@@ -234,7 +233,7 @@ cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:V
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
 1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
-2.	 Â“enabled_backendsÂ” will be commented by default, please un-comment and add the multiple back-end names as below. 
+2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
  ```
  enabled_backends=viprdriver-iscsi,viprdriver-fc,viprdriver-scaleio
  ```
@@ -377,7 +376,7 @@ following text to the scaleio.filters file
     "consistencygroup:get_all": "",
 ```
 
-11. Names of resources in backend storage 
+11. Names of resources in backend stroage 
 =========================================
 * All the resources like Volume, Consistency Group, Snapshot and 
   Consistency Group Snapshot will use the display name in openstack 
@@ -403,4 +402,4 @@ License
 
 
 
-``Copyright (c) 2013-2015 EMC Corporation.``
+``Copyright (c) 2013 EMC Corporation.``
