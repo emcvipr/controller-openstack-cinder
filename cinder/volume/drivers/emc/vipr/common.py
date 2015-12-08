@@ -19,6 +19,7 @@ import string
 import sys
 import time
 import traceback
+import os
 
 from oslo.config import cfg
 
@@ -98,9 +99,9 @@ volume_opts = [
     cfg.StrOpt('scaleio_server_certificate_path',
                default=None,
                help='Server certificate path'),
-    cfg.StrOpt('vipr_storage_vmax',
+    cfg.StrOpt('vipr_emulate_snapshot',
                default='False',
-               help='True | False to indicate if the storage array in ViPR is VMAX')
+               help='True | False to indicate if the storage array in ViPR is VMAX or VPLEX')
 ]
 
 CONF = cfg.CONF
@@ -108,6 +109,7 @@ CONF.register_opts(volume_opts)
 
 URI_VPOOL_VARRAY_CAPACITY = '/block/vpools/{0}/varrays/{1}/capacity'
 URI_BLOCK_EXPORTS_FOR_INITIATORS = '/block/exports?initiators={0}'
+EXPORT_RETRY_COUNT = 5
 
 
 def retry_wrapper(func):
@@ -236,10 +238,14 @@ class EMCViPRDriverCommon(object):
                 self.configuration.vipr_port)
 
             cookiedir = self.configuration.vipr_cookiedir
+            shell_pid = os.getppid()
+            cookie_path = str(self.configuration.vipr_username)+ 'cookie' + str(shell_pid)
+
             obj.authenticate_user(self.configuration.vipr_username,
                                   self.configuration.vipr_password,
                                   cookiedir,
-                                  None)
+                                  cookie_path)
+            vipr_utils.COOKIE = cookiedir + "/" + cookie_path
             EMCViPRDriverCommon.AUTHENTICATED = True
 
     @retry_wrapper
@@ -709,10 +715,16 @@ class EMCViPRDriverCommon(object):
                 resource_id,
                 sync=True)
 
+            clone_vol_path = self.configuration.vipr_tenant + "/" + self.configuration.vipr_project + "/" + name
+            detachable = self.volume_obj.is_volume_detachable(clone_vol_path)
+            LOG.info("Is volume detachable : " + str(detachable))
+                                                 
             #detach it from the source volume immediately after creation
-            self.volume_obj.volume_clone_detach("",
-                self.configuration.vipr_tenant + "/" +
-                self.configuration.vipr_project + "/" + name, True)
+            if(detachable):
+                self.volume_obj.volume_clone_detach("",clone_vol_path, True)
+
+        except IndexError as e:
+            LOG.exception("Volume clone detach returned empty task list")
 
         except vipr_utils.SOSError as e:
             if(e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR):
@@ -753,7 +765,7 @@ class EMCViPRDriverCommon(object):
         """Creates volume from given snapshot ( snapshot clone to volume )."""
         self.authenticate_user()
 
-        if self.configuration.vipr_storage_vmax == 'True':
+        if self.configuration.vipr_emulate_snapshot == 'True':
             self.create_cloned_volume(volume, snapshot)
             return
 
@@ -865,7 +877,7 @@ class EMCViPRDriverCommon(object):
         except AttributeError as e:
             LOG.info("No Consistency Group associated with the volume")
 
-        if self.configuration.vipr_storage_vmax == 'True':
+        if self.configuration.vipr_emulate_snapshot == 'True':
             self.create_cloned_volume(snapshot, volume)
             self.set_volume_tags(snapshot, ['_volume'])
             return
@@ -937,7 +949,7 @@ class EMCViPRDriverCommon(object):
         except AttributeError as e:
             LOG.info("No Consistency Group associated with the volume")
 
-        if self.configuration.vipr_storage_vmax == 'True':
+        if self.configuration.vipr_emulate_snapshot == 'True':
             self.delete_volume(snapshot)
             return
 
@@ -993,8 +1005,8 @@ class EMCViPRDriverCommon(object):
             self.authenticate_user()
             volumename = self._get_vipr_volume_name(volume)
             foundgroupname = self._find_exportgroup(initiatorPorts)
+            foundhostname = None
             if foundgroupname is None:
-                foundhostname = None
                 for i in xrange(len(initiatorPorts)):
                     # check if this initiator is contained in any ViPR Host
                     # object
@@ -1050,15 +1062,69 @@ class EMCViPRDriverCommon(object):
                     self.configuration.vipr_varray,
                     'Host',
                     foundhostname)
-            LOG.debug("adding the volume to the exportgroup : " + volumename)
-            self.exportgroup_obj.exportgroup_add_volumes(
-                True,
-                foundgroupname,
-                self.configuration.vipr_tenant,
-                self.configuration.vipr_project,
-                [volumename],
-                None,
-                None)
+
+            next_lun_id = 1
+            for try_id in range(1,EXPORT_RETRY_COUNT+1):
+                try:
+                    vipr_exportgroup = self.exportgroup_obj.exportgroup_show(
+                                   foundgroupname,
+                                   self.configuration.vipr_project,
+                                   self.configuration.vipr_tenant,
+                                   None, False)
+
+                except vipr_utils.SOSError as e:
+                    if e.err_code == vipr_utils.SOSError.NOT_FOUND_ERR:
+                        self.exportgroup_obj.exportgroup_create(
+                            foundgroupname,
+                            self.configuration.vipr_project,
+                            self.configuration.vipr_tenant,
+                            self.configuration.vipr_varray,
+                            'Host',
+                            foundhostname)
+
+                # We explicitly give lun id an unused value greater then 0.
+                # This is to get around the problem, which crops up while creating 
+                # volume from image when cinder node is different from nova node.
+                # When using lun id of 0, export of volume is having problems.
+                volumes_list = [vol['lun'] for vol in vipr_exportgroup['volumes']]
+                volumes_list.sort()
+                for iter in volumes_list:
+                    if(iter > next_lun_id):
+                        break
+                    elif(iter < next_lun_id):
+                        continue
+                    elif(iter == next_lun_id):
+                        next_lun_id = next_lun_id + 1
+
+                LOG.debug("adding the volume to the exportgroup : " + volumename)
+                try:
+                    self.exportgroup_obj.exportgroup_add_volumes(
+                        True,
+                        foundgroupname,
+                        self.configuration.vipr_tenant,
+                        self.configuration.vipr_project,
+                        [volumename+":"+str(next_lun_id)],
+                        None,
+                        None)
+                    break
+                except vipr_utils.SOSError as ex:
+                        if (try_id >= EXPORT_RETRY_COUNT):
+                            raise vipr_utils.SOSError(
+                               vipr_utils.SOSError.SOS_FAILURE_ERR,
+                               "Attach volume (" +
+                               self._get_vipr_volume_name(volume) +
+                               ") to host (" +
+                               hostname +
+                               ") initiator (" +
+                               initiatorPorts[0] +
+                               ") failed: " +
+                               ex.err_text)
+                        else:
+                            LOG.exception(_("Export volume with LUN: %s failed.") 
+                                          % str(next_lun_id))
+                            LOG.info("Retry with next available LUN ID")
+                            next_lun_id = next_lun_id + 1
+                               
             return self._find_device_info(volume, initiatorPorts)
 
         except vipr_utils.SOSError as e:
@@ -1426,3 +1492,31 @@ class EMCViPRDriverCommon(object):
             LOG.error(_("Failed to update volume stats"))
             with excutils.save_and_reraise_exception():
                     LOG.exception(_("Update volume stats failed"))
+
+
+    @retry_wrapper
+    def retype(self, ctxt, volume, new_type, diff, host):
+        """changes the vpool type"""
+        self.authenticate_user()
+        volume_name = self._get_vipr_volume_name(volume)
+        vpool_name = new_type['extra_specs']['ViPR:VPOOL']
+
+        try:
+            task = self.volume_obj.update(
+                self.configuration.vipr_tenant +
+                "/" +
+                self.configuration.vipr_project,
+                volume_name,
+                vpool_name)
+
+            self.volume_obj.check_for_sync(task['task'][0], True)
+            return True
+        except vipr_utils.SOSError as e:
+            if e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR:
+                raise vipr_utils.SOSError(
+                    vipr_utils.SOSError.SOS_FAILURE_ERR,
+                    "Volume " + volume_name + ": update failed\n" + e.err_text)
+            else:
+                with excutils.save_and_reraise_exception():
+                    LOG.exception(_("Volume : %s type update failed") % volume_name)
+
