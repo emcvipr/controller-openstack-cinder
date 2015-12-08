@@ -10,22 +10,17 @@ Cinder Driver. The driver works with following releases of Openstack.
 2. Overview
 ========
 
-The EMC ViPR Cinder driver contains ISCSIDriver, FibreChannelDriver as well as a
-ScaleIODriver, with the ability to create/delete and attach/detach
-volumes and create/delete snapshots, etc.
+The EMC ViPR Cinder driver contains ISCSIDriver, FibreChannelDriver with the ability 
+to create/delete and attach/detach volumes and create/delete snapshots, etc.
 
 
 3. Requirements
 ============
 
-1. EMC ViPR version 2.3 is required. Refer to the EMC ViPR
+1. EMC ViPR version 2.4 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
-3. EMC ViPR 2.3 in combination with Openstack Juno supports ScaleIO versions 1.31 
-   as the backend.
-4. EMC ViPR 2.3 in combination with Openstack Juno supports consistency group and 
-   consistency group snap shots.
-5. EMC ViPR 2.3 in combination with Openstack Juno and Kilo supports consistency group and 
+3. EMC ViPR 2.4 in combination with Openstack Juno and Kilo supports consistency group and 
    consistency group snap shots. Consistency Group update is supported in Kilo only.
 
 
@@ -152,9 +147,7 @@ The EMC ViPR environment must meet specific configuration requirements to suppor
 * The ViPR Cinder Driver requires one Virtual Storage Pool, with the following requirements (non-specified values can be set as desired):
    - Storage Type: Block
    - Provisioning Type: Thin
-   - Protocol: iSCSI, Fibre Channel or both
-                        or
-                    ScaleIO
+   - Protocol: iSCSI, Fibre Channel or both. ScaleIO is NOT qualified
    - Multi-Volume Consistency: DISABLED OR ENABLED (Consistency group is supported from Juno release)
    - Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots. 
 
@@ -178,16 +171,7 @@ vipr_tenant=<Tenant>
 vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
 vipr_cookiedir=/tmp
-vipr_storage_vmax= True or False
-
-Below fields are needed only for ScaleIO backend.
-
-vipr_scaleio_rest_gateway_ip=10.247.78.45
-vipr_scaleio_rest_gateway_port=443
-vipr_scaleio_rest_server_username=admin
-vipr_scaleio_rest_server_password=adminpassword
-scaleio_verify_server_certificate=True or False
-scaleio_server_certificate_path=<path-of-certificate-for-validation>
+vipr_emulate_snapshot= True or False
 
 
 ```
@@ -200,13 +184,7 @@ Note 2: To utilize the Fibre Channel Driver, replace the volume_driver line abov
 volume_driver = cinder.volume.drivers.emc.vipr.fc.EMCViPRFCDriver
 
 ```
-Note 3: To utilize the ScaleIO Driver, replace the volume_driver line above with:
-
-```
-volume_driver = cinder.volume.drivers.emc.vipr.scaleio.EMCViPRScaleIODriver
-
-```
-Note 4: set vipr_storage_vmax to True, if the ViPR vpool has VMAX or VPLEX(with VMAX as backend) as the backing storage.
+Note 3: set vipr_emulate_snapshot to True, if the ViPR vpool has VMAX or VPLEX as the backing storage.
 
 * Modify the rpc_response_timeout value in /etc/cinder/cinder.conf to at least 5 minutes. if this value does not already exist within the cinder.conf file, please add it
 
@@ -228,14 +206,14 @@ cinder --os-username admin --os-tenant-name admin type-create <typename>
 cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:VPOOL=<ViPR-PoolName>
 ```
 
-5.4 Notes to configure FC,iSCSI and ScaleIO back-end drivers(Multiple back-ends)
+5.4 Notes to configure FC,iSCSI back-end drivers(Multiple back-ends)
 --------------------------------------------------------------------------------
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
 1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
 2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
  ```
- enabled_backends=viprdriver-iscsi,viprdriver-fc,viprdriver-scaleio
+ enabled_backends=viprdriver-iscsi,viprdriver-fc
  ```
 3.	Add the following at the end of the file; please note that each section is named as in #2 above.
 ```
@@ -266,25 +244,6 @@ vipr_varray=<ViPR-Virtual-Array-Name>
 vipr_cookiedir=/tmp
 ```
 
-```
-[viprdriver-scaleio]
-volume_driver = cinder.volume.drivers.emc.vipr.scaleio.EMCViPRScaleIODriver
-volume_backend_name=EMCViPRScaleIODriver
-vipr_hostname=<ViPR Host Name>
-vipr_port=4443
-vipr_username=<username>
-vipr_password=<password>
-vipr_tenant=<Tenant>
-vipr_project=<ViPR-Project-Name>
-vipr_varray=<ViPR-Virtual-Array-Name>
-vipr_cookiedir=/tmp
-vipr_scaleio_rest_gateway_ip=<ScaleIO Rest Gateway>
-vipr_scaleio_rest_gateway_port=443
-vipr_scaleio_rest_server_username=<rest gateway username>
-vipr_scaleio_rest_server_password=<rest gateway password>
-scaleio_verify_server_certificate=True or False
-scaleio_server_certificate_path=<certificate path>
-```
 4. Restart the cinder-volume service.
 5. Setup the volume-types and volume-type to volume-backend association.
 
@@ -295,10 +254,6 @@ cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performanc
 cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance FC"
 cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set ViPR:VPOOL="High Performance FC"
 cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set volume_backend_name=EMCViPRFCDriver
-cinder --os-username admin --os-tenant-name admin extra-specs-list
-cinder --os-username admin --os-tenant-name admin type-create "ViPR performax SIO"
-cinder --os-username admin --os-tenant-name admin type-key "ViPR performax SIO" set ViPR:VPOOL="Scaled Perf"
-cinder --os-username admin --os-tenant-name admin type-key "ViPR performax SIO" set volume_backend_name=EMCViPRScaleIODriver
 cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
 
@@ -324,47 +279,8 @@ cinder --os-username admin --os-tenant-name admin extra-specs-list
 
 ```
 
-8. ScaleIO notes specific to SDC configuration
-==============================================
-* Plese install the scaleio SDC on the openstack host.
-* The OpenStack compute host must be be added as the SDC the ScaleIO MDS using the below command
-  NOTE: The below step has to be repeated when ever the SDC(openstack host in this case) is rebooted.
 
-```
-/opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip List of MDM IPs(starting with primary MDM and separated by comma)
-Example: /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip 10.247.78.45,10.247.78.46,10.247.78.47
-```
-
-* Verify the above with the following command. It should list the above configuration.
-```
-/opt/emc/scaleio/sdc/bin/drv_cfg --query_mdms
-```
-
-9. Configuring ScaleIO nova driver
-====================================
-* If the ScaleIO being used is 1.30, then copy the file scaleiodriver.py to the 
-nova/virt/libvirt directory.
-* If the ScaleIO being used is 1.31, then copy the file scaleiolibvirtdriver to the 
-nova/virt/libvirt directory.
-* If the ScaleIO being used is 1.30, then use a text editor to edit the libvirt_volume_driver 
-key in the Nova configuration file /etc/nova/nova.conf. Add the scaleio key value pair mentioned below
-```
-libvirt_volume_drivers =
-scaleio=nova.virt.libvirt.scaleiodriver.LibvirtScaleIOVolumeDriver
-```
-* If the ScaleIO being used is 1.31, then use a text editor to edit the libvirt_volume_driver 
-key in the Nova configuration file /etc/nova/nova.conf. Add the scaleio key value pair mentioned below
-```
-libvirt_volume_drivers =
-scaleio=nova.virt.libvirt.scaleiolibvirtdriver.LibvirtScaleIOVolumeDriver
-```
-* Add the same text mentioned in the previous step to the volume_drivers key.
-* Create the file scaleio.filters at the locations /etc/nova/rootwrap.d and /etc/cinder/rootwrap.d. Add the
-following text to the scaleio.filters file
-
-[Filters]drv_cfg: CommandFilter, /opt/emc/scaleio/sdc/bin/drv_cfg, root
-
-10. Consistency Group specific configuration 
+8. Consistency Group specific configuration 
 ====================================
 * Use a text editor to edit the file /etc/cinder/policy.json and change the values
   of the below fields as specified. Upon editing the file, restart the c-api service.
@@ -376,7 +292,7 @@ following text to the scaleio.filters file
     "consistencygroup:get_all": "",
 ```
 
-11. Names of resources in backend stroage 
+9. Names of resources in backend stroage 
 =========================================
 * All the resources like Volume, Consistency Group, Snapshot and 
   Consistency Group Snapshot will use the display name in openstack 
@@ -402,4 +318,4 @@ License
 
 
 
-``Copyright (c) 2013 EMC Corporation.``
+``Copyright (c) 2015 EMC Corporation.``

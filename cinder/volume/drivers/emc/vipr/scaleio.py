@@ -334,3 +334,7 @@ class EMCViPRScaleIODriver(driver.VolumeDriver):
         return response
 
 
+    def retype(self, ctxt, volume, new_type, diff, host):
+        """Change the volume type"""
+        return self.common.retype(ctxt, volume, new_type, diff, host)
+
