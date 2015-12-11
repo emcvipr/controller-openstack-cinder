@@ -45,6 +45,7 @@ The following operations are supported:
 * Update consistency group.(KILO only)
 * Create consistency group snapshot.
 * Delete consistency group snapshot.
+* Change volume type.
 
 
 
