@@ -3,8 +3,8 @@
 
 This guide explains how to install, configure, and make use of the EMC ViPR
 Cinder Driver. The driver works with following releases of Openstack.
-1. Juno
-2. Kilo
+1. Kilo
+2. Liberty
 
 
 2. Overview
@@ -17,11 +17,11 @@ to create/delete and attach/detach volumes and create/delete snapshots, etc.
 3. Requirements
 ============
 
-1. EMC ViPR version 2.4 is required. Refer to the EMC ViPR
+1. EMC ViPR version 2.4 SP1 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
-3. EMC ViPR 2.4 in combination with Openstack Juno and Kilo supports consistency group and 
-   consistency group snap shots. Consistency Group update is supported in Kilo only.
+3. EMC ViPR 2.4 SP1 in combination with Openstack Liberty and Kilo supports 
+   consistency group, consistency group snap shots and Consistency Group update.
 
 
 4. Supported Operations
@@ -42,10 +42,9 @@ The following operations are supported:
 * Extend volume.
 * Create consistency group.
 * Delete consistency group.
-* Update consistency group.(KILO only)
+* Update consistency group.
 * Create consistency group snapshot.
 * Delete consistency group snapshot.
-* Change volume type.
 
 
 
@@ -319,4 +318,4 @@ License
 
 
 
-``Copyright (c) 2015 EMC Corporation.``
+``Copyright (c) 2016 EMC Corporation.``

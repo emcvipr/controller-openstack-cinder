@@ -95,7 +95,7 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         """Driver entry point to get the export info for an existing volume."""
         pass
 
-    def create_export(self, context, volume):
+    def create_export(self, context, volume, connector=None):
         """Driver entry point to get the export info for a new volume."""
         pass
 

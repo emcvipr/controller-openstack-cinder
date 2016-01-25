@@ -21,14 +21,21 @@ import time
 import traceback
 import os
 
-from oslo.config import cfg
+try:
+    from oslo.config import cfg
+except ImportError:
+    from oslo_config import cfg
+
 
 from cinder import context
 from cinder import exception
 try:
     from oslo.utils import excutils
 except ImportError:
-    from cinder.openstack.common import excutils
+    try:
+        from cinder.openstack.common import excutils
+    except ImportError:
+        from oslo_utils import excutils
 
 try:
     from oslo_log import log as logging
@@ -1102,6 +1109,9 @@ class EMCViPRDriverCommon(object):
                         True,
                         foundgroupname,
                         self.configuration.vipr_tenant,
+                        None,
+                        None,
+                        None,
                         self.configuration.vipr_project,
                         [volumename+":"+str(next_lun_id)],
                         None,
