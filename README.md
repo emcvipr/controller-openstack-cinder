@@ -3,25 +3,28 @@
 
 This guide explains how to install, configure, and make use of the EMC ViPR
 Cinder Driver. The driver works with following releases of Openstack.
-1. Kilo
-2. Liberty
+1. Liberty
+2. Mitaka
 
 
 2. Overview
 ========
 
-The EMC ViPR Cinder driver contains ISCSIDriver, FibreChannelDriver with the ability 
+The EMC ViPR Cinder driver contains ISCSIDriver, FibreChannelDriver and ScaleIODriver with the ability 
 to create/delete and attach/detach volumes and create/delete snapshots, etc.
 
 
 3. Requirements
 ============
 
-1. EMC ViPR version 2.4 SP1 is required. Refer to the EMC ViPR
+1. EMC ViPR version 3.0 is required. Refer to the EMC ViPR
    documentation for installation and configuration instructions.
 2. EMC ViPR CLI to be installed on the Openstack Cinder node/s.
-3. EMC ViPR 2.4 SP1 in combination with Openstack Liberty and Kilo supports 
+3. EMC ViPR 3.0 in combination with Openstack Liberty or Mitaka supports 
    consistency group, consistency group snap shots and Consistency Group update.
+4. EMC ViPR 3.0 in combination with Openstack Liberty supports ScaleIO version 
+   2.0 as the backend.
+
 
 
 4. Supported Operations
@@ -147,7 +150,10 @@ The EMC ViPR environment must meet specific configuration requirements to suppor
 * The ViPR Cinder Driver requires one Virtual Storage Pool, with the following requirements (non-specified values can be set as desired):
    - Storage Type: Block
    - Provisioning Type: Thin
-   - Protocol: iSCSI, Fibre Channel or both. ScaleIO is NOT qualified
+   - Protocol: iSCSI 
+               Fibre Channel
+               iSCSI and Fibre Channel
+               ScaleIO
    - Multi-Volume Consistency: DISABLED OR ENABLED (Consistency group is supported from Juno release)
    - Maximum Native Snapshots: A value greater than 0 allows the OpenStack user to take Snapshots. 
 
@@ -172,7 +178,16 @@ vipr_project=<ViPR-Project-Name>
 vipr_varray=<ViPR-Virtual-Array-Name>
 vipr_cookiedir=/tmp
 vipr_emulate_snapshot= True or False
+vipr_security_file=<ViPR-security-file>
 
+Below fields are needed only for ScaleIO backend.
+
+vipr_scaleio_rest_gateway_ip=<IP address>
+vipr_scaleio_rest_gateway_port=443
+vipr_scaleio_rest_server_username=admin
+vipr_scaleio_rest_server_password=adminpassword
+scaleio_verify_server_certificate=True or False
+scaleio_server_certificate_path=<path-of-certificate-for-validation>
 
 ```
 
@@ -185,6 +200,8 @@ volume_driver = cinder.volume.drivers.emc.vipr.fc.EMCViPRFCDriver
 
 ```
 Note 3: set vipr_emulate_snapshot to True, if the ViPR vpool has VMAX or VPLEX as the backing storage.
+
+Note 4: Starting with Liberty release of Openstack, ScaleIO nova driver is upstream. Hence, no additional steps are needed to configure the ScaleIO nova driver.
 
 * Modify the rpc_response_timeout value in /etc/cinder/cinder.conf to at least 5 minutes. if this value does not already exist within the cinder.conf file, please add it
 
@@ -206,14 +223,14 @@ cinder --os-username admin --os-tenant-name admin type-create <typename>
 cinder --os-username admin --os-tenant-name admin type-key <typename> set ViPR:VPOOL=<ViPR-PoolName>
 ```
 
-5.4 Notes to configure FC,iSCSI back-end drivers(Multiple back-ends)
+5.4 Notes to configure FC,iSCSI,ScaleIO back-end drivers(Multiple back-ends)
 --------------------------------------------------------------------------------
 
 Add/modify the following entries if you are planning to use multiple back-end drivers.
 1.	The "enabled_backends" parameter needs to be set in cinder.conf and other parameters required in each backend need to be placed in individual backend sections (rather than the DEFAULT section).
 2.	 “enabled_backends” will be commented by default, please un-comment and add the multiple back-end names as below. 
  ```
- enabled_backends=viprdriver-iscsi,viprdriver-fc
+ enabled_backends=viprdriver-iscsi,viprdriver-fc, viprdriver-scaleio
  ```
 3.	Add the following at the end of the file; please note that each section is named as in #2 above.
 ```
@@ -244,6 +261,26 @@ vipr_varray=<ViPR-Virtual-Array-Name>
 vipr_cookiedir=/tmp
 ```
 
+```
+[viprdriver-scaleio]
+volume_driver = cinder.volume.drivers.emc.vipr.scaleio.EMCViPRScaleIODriver
+volume_backend_name=EMCViPRScaleIODriver
+vipr_hostname=<ViPR Host Name>
+vipr_port=4443
+vipr_username=<username>
+vipr_password=<password>
+vipr_tenant=<Tenant>
+vipr_project=<ViPR-Project-Name>
+vipr_varray=<ViPR-Virtual-Array-Name>
+vipr_cookiedir=/tmp
+vipr_scaleio_rest_gateway_ip=<ScaleIO Rest Gateway>
+vipr_scaleio_rest_gateway_port=443
+vipr_scaleio_rest_server_username=<rest gateway username>
+vipr_scaleio_rest_server_password=<rest gateway password>
+scaleio_verify_server_certificate=True or False
+scaleio_server_certificate_path=<certificate path>
+```
+
 4. Restart the cinder-volume service.
 5. Setup the volume-types and volume-type to volume-backend association.
 
@@ -254,6 +291,10 @@ cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performanc
 cinder --os-username admin --os-tenant-name admin type-create "ViPR High Performance FC"
 cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set ViPR:VPOOL="High Performance FC"
 cinder --os-username admin --os-tenant-name admin type-key "ViPR High Performance FC" set volume_backend_name=EMCViPRFCDriver
+cinder --os-username admin --os-tenant-name admin extra-specs-list
+cinder --os-username admin --os-tenant-name admin type-create "ViPR performance SIO"
+cinder --os-username admin --os-tenant-name admin type-key "ViPR performance SIO" set ViPR:VPOOL="Scaled Perf"
+cinder --os-username admin --os-tenant-name admin type-key "ViPR performance SIO" set volume_backend_name=EMCViPRScaleIODriver
 cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
 
@@ -280,9 +321,33 @@ cinder --os-username admin --os-tenant-name admin extra-specs-list
 ```
 
 
-8. Consistency Group specific configuration 
+8. ScaleIO notes specific to SDC configuration
+==============================================
+* Plese install the ScaleIO SDC on the openstack host.
+* The OpenStack compute host must be be added as the SDC to the ScaleIO MDS using the below command
+  NOTE: The below step has to be repeated whenever the SDC(openstack host in this case) is rebooted.
+
+```
+/opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip List of MDM IPs(starting with primary MDM and separated by comma)
+Example: /opt/emc/scaleio/sdc/bin/drv_cfg --add_mdm --ip 10.247.78.45,10.247.78.46,10.247.78.47
+```
+
+* Verify the above with the following command. It should list the above configuration.
+```
+/opt/emc/scaleio/sdc/bin/drv_cfg --query_mdms
+```
+
+
+9. Configuring ScaleIO nova driver
 ====================================
-* Use a text editor to edit the file /etc/cinder/policy.json and change the values
+* Starting with Liberty release of openstack, ScaleIO nova driver is upstream. Hence, no additional 
+  steps are needed to configure the ScaleIO nova driver.
+
+
+10. Consistency Group specific configuration 
+====================================
+* To enable the support of consistency group and consistency group snapshot operations, 
+  use a text editor to edit the file /etc/cinder/policy.json and change the values
   of the below fields as specified. Upon editing the file, restart the c-api service.
 
 ```
@@ -290,15 +355,65 @@ cinder --os-username admin --os-tenant-name admin extra-specs-list
     "consistencygroup:delete": "",
     "consistencygroup:get": "",
     "consistencygroup:get_all": "",
+    "consistencygroup:update": "",
+    "consistencygroup:create_cgsnapshot" : "group:nobody",
+    "consistencygroup:delete_cgsnapshot": "group:nobody",
+    "consistencygroup:get_cgsnapshot": "group:nobody",
+    "consistencygroup:get_all_cgsnapshots": "group:nobody",
 ```
 
-9. Names of resources in backend stroage 
+
+11. Names of resources in backend stroage 
 =========================================
 * All the resources like Volume, Consistency Group, Snapshot and 
   Consistency Group Snapshot will use the display name in openstack 
   for naming in the backend storage. Previously, we used the
   openstack ID of snapshot for naming the snapshot in the backend.
   
+
+12. Generating & using security file
+=========================================
+* use the file encrypt_password.py in util folder to generate a
+  security file, which has the username and password in an encrypted form.
+
+* Usage of encrypt_password.py:
+```
+   python encrypt_password.py -user <vipruser> -password <viprpassword>
+            -securityfile <filepath where encrypted security is stored>
+               -cinderuser <User account which runs the cinder service>
+```
+* The security file generation can be done in two ways
+   1. The admin can login as root user and then run the above command to
+      generate a security file at a location, which is accessible to only
+      "cinder" user account.
+
+                        OR
+
+   2. Login as the root user and then open /etc/passwd and then go to the
+      entry named cinder.
+
+      Change the last entry from /sbin/nologin to /bin/bash and you will 
+      be able to run commands through the account "cinder"
+
+      Make sure that the encrypt_password.py is placed in a location, which
+      has permission for cinder user and run the below command and run the
+      below command
+
+      ```
+       su -l cinder -c "python <appropriatefolder>/encrypt_password.py 
+                              -user <vipruser> -password <viprpassword> 
+            -securityfile <filepath_where_encrypted_security_is_stored> 
+               -cinderuser <User_account_which_runs_the_cinder_service>"
+      ```
+* open /etc/cinder/cinder.conf and make following changes
+   ```
+   vipr_security_file=<filepath_where_encrypted_security_is_stored>
+   ```
+   
+  If the vipr_security_file entry is not specified or is empty,
+  then the regular username and password fields will be used.
+
+
 License
 ----------------------
 

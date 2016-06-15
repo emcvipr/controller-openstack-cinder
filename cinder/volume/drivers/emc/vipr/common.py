@@ -29,6 +29,8 @@ except ImportError:
 
 from cinder import context
 from cinder import exception
+from cinder.objects import fields
+
 try:
     from oslo.utils import excutils
 except ImportError:
@@ -42,7 +44,11 @@ try:
 except ImportError:
     from cinder.openstack.common import log as logging
 
-from cinder.openstack.common.gettextutils import _
+try:
+    from cinder.openstack.common.gettextutils import _
+except ImportError:
+    from cinder.i18n import _
+
 from cinder.volume import volume_types
 
 
@@ -108,7 +114,10 @@ volume_opts = [
                help='Server certificate path'),
     cfg.StrOpt('vipr_emulate_snapshot',
                default='False',
-               help='True | False to indicate if the storage array in ViPR is VMAX or VPLEX')
+               help='True | False to indicate if the storage array in ViPR is VMAX or VPLEX'),
+    cfg.StrOpt('vipr_security_file',
+               default=None,
+               help='Path of security file') 
 ]
 
 CONF = cfg.CONF
@@ -248,12 +257,33 @@ class EMCViPRDriverCommon(object):
             shell_pid = os.getppid()
             cookie_path = str(self.configuration.vipr_username)+ 'cookie' + str(shell_pid)
 
-            obj.authenticate_user(self.configuration.vipr_username,
-                                  self.configuration.vipr_password,
+            username = None
+            password = None
+  
+
+            if( (self.configuration.vipr_security_file is not '')
+               and (self.configuration.vipr_security_file is not None)):
+                from Crypto.Cipher import ARC4
+                import getpass
+                obj1 = ARC4.new(getpass.getuser())
+                security_file = open(self.configuration.vipr_security_file, 'r')
+                cipher_text = security_file.readline().rstrip()
+                username = obj1.decrypt(cipher_text)
+                cipher_text = security_file.readline().rstrip()
+                password = obj1.decrypt(cipher_text)
+                security_file.close()
+            else:
+                username = self.configuration.vipr_username
+                password = self.configuration.vipr_password
+
+            obj.authenticate_user(username,
+                                  password,
                                   cookiedir,
                                   cookie_path)
+
             vipr_utils.COOKIE = cookiedir + "/" + cookie_path
             EMCViPRDriverCommon.AUTHENTICATED = True
+
 
     @retry_wrapper
     def create_volume(self, vol, driver):
@@ -372,6 +402,16 @@ class EMCViPRDriverCommon(object):
             self.configuration.vipr_hostname,
             self.configuration.vipr_port)
 
+        #if the result is empty, then search with the tagname as "OpenStack:obj_id"
+        #the openstack attribute for id can be obj_id instead of id. this depends 
+        #on the version
+        if(len(rslt) == 0):
+            tagname="OpenStack:obj_id:"+cg['id']
+            rslt = vipr_utils.search_by_tag(
+                vipr_cg.ConsistencyGroup.URI_SEARCH_CONSISTENCY_GROUPS_BY_TAG.format(tagname),
+                self.configuration.vipr_hostname,
+                self.configuration.vipr_port)
+
         if(len(rslt) > 0):
             rsltCg = self.consistencygroup_obj.show(rslt[0],
                 self.configuration.vipr_project, self.configuration.vipr_tenant)
@@ -430,9 +470,10 @@ class EMCViPRDriverCommon(object):
 
 
     @retry_wrapper
-    def create_cgsnapshot(self, driver, context, cgsnapshot):
+    def create_cgsnapshot(self, driver, context, cgsnapshot, snapshots):
         self.authenticate_user()
 
+        snapshots_model_update = []
         cgsnapshot_id = cgsnapshot['id']     
         cgsnapshot_name = cgsnapshot['name']     
         cg_id = cgsnapshot['consistencygroup_id']
@@ -440,9 +481,6 @@ class EMCViPRDriverCommon(object):
 
         if(cg_id):
             cg_name = self._get_consistencygroup_name(driver , context , cg_id)
-
-        snapshots = driver.db.snapshot_get_all_for_cgsnapshot(
-            context, cgsnapshot_id)
 
         model_update = {}
         LOG.info(_('Start to create cgsnapshot for consistency group'
@@ -518,10 +556,13 @@ class EMCViPRDriverCommon(object):
                                     snapshot)
 
                 snapshot['status'] = 'available'
-           
-            model_update['status'] = 'available'
+                snapshots_model_update.append(
+                    {'id': snapshot['id'], 'status': 'available'})
 
-            return model_update, snapshots
+           
+            model_update = {'status': fields.ConsistencyGroupStatus.AVAILABLE}
+
+            return model_update, snapshots_model_update
                                                 
         except vipr_utils.SOSError as e:
             if(e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR):
@@ -538,20 +579,17 @@ class EMCViPRDriverCommon(object):
 
 
     @retry_wrapper
-    def delete_cgsnapshot(self, driver, context, cgsnapshot):
+    def delete_cgsnapshot(self, driver, context, cgsnapshot, snapshots):
         self.authenticate_user()
         cgsnapshot_id = cgsnapshot['id']
         cgsnapshot_name = cgsnapshot['name']
 
+        snapshots_model_update = []
         cg_id = cgsnapshot['consistencygroup_id']     
 
         cg_name = self._get_consistencygroup_name(driver , context , cg_id)
 
-        snapshots = driver.db.snapshot_get_all_for_cgsnapshot(
-            context, cgsnapshot_id)
-
         model_update = {}
-        model_update['status'] = cgsnapshot['status']
         LOG.info(_('Delete cgsnapshot %(snap_name)s for consistency group: '
                    '%(group_name)s') % {'snap_name': cgsnapshot['name'],
                  'group_name': cg_name})
@@ -579,12 +617,15 @@ class EMCViPRDriverCommon(object):
                 'block',
                 resUri,
                 uri,
-                True)
+                True,
+                0)
 
             for snapshot in snapshots:
-                snapshot['status'] = 'deleted'
+                #snapshot['status'] = 'deleted'
+                snapshots_model_update.append(
+                    {'id': snapshot['id'], 'status': 'deleted'})
 
-            return model_update, snapshots
+            return model_update, snapshots_model_update
             
         except vipr_utils.SOSError as e:
             if(e.err_code == vipr_utils.SOSError.SOS_FAILURE_ERR):
@@ -886,11 +927,11 @@ class EMCViPRDriverCommon(object):
 
         if self.configuration.vipr_emulate_snapshot == 'True':
             self.create_cloned_volume(snapshot, volume)
-            self.set_volume_tags(snapshot, ['_volume'])
+            self.set_volume_tags(snapshot, ['_volume','_obj_volume_type'])
             return
 
         try:
-            snapshotname = snapshot['display_name']
+            snapshotname = self._get_snapshot_name(snapshot)
             vol = snapshot['volume']
 
             volumename = self._get_vipr_volume_name(vol)
@@ -1342,6 +1383,16 @@ class EMCViPRDriverCommon(object):
             name = vol['name']
 
         return name
+
+    def _get_snapshot_name(self, snap):
+
+        name = snap.get('display_name', None)
+
+        if name is None or len(name) == 0:
+            name = snap['name']
+
+        return name
+
 
     def _get_vpool(self, volume):
         vpool = {}

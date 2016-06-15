@@ -63,17 +63,17 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
     def create_volume(self, volume):
         """Creates a Volume."""
         self.common.create_volume(volume, self)
-        self.common.set_volume_tags(volume)
+        self.common.set_volume_tags(volume, ['_obj_volume_type'])
 
     def create_cloned_volume(self, volume, src_vref):
         """Creates a cloned Volume."""
         self.common.create_cloned_volume(volume, src_vref)
-        self.common.set_volume_tags(volume)
+        self.common.set_volume_tags(volume, ['_obj_volume_type'])
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates a volume from a snapshot."""
         self.common.create_volume_from_snapshot(snapshot, volume, self.db)
-        self.common.set_volume_tags(volume)
+        self.common.set_volume_tags(volume, ['_obj_volume_type'])
 
     def extend_volume(self, volume, new_size):
         """expands the size of the volume."""
@@ -115,13 +115,13 @@ class EMCViPRFCDriver(driver.FibreChannelDriver):
         """Deletes a consistency group."""
         return self.common.delete_consistencygroup(self, context, group)
         
-    def create_cgsnapshot(self, context, cgsnapshot):
+    def create_cgsnapshot(self, context, cgsnapshot, snapshots):
         """Creates a cgsnapshot."""
-        return self.common.create_cgsnapshot(self, context, cgsnapshot)
+        return self.common.create_cgsnapshot(self, context, cgsnapshot, snapshots)
 
-    def delete_cgsnapshot(self, context, cgsnapshot):
+    def delete_cgsnapshot(self, context, cgsnapshot, snapshots):
         """Deletes a cgsnapshot."""
-        return self.common.delete_cgsnapshot(self, context, cgsnapshot)
+        return self.common.delete_cgsnapshot(self, context, cgsnapshot, snapshots)
 
     def check_for_export(self, context, volume_id):
         """Make sure volume is exported."""
